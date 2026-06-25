@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }} // Interface</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="header-content">
+        <div class="brand">
+          <h1 class="brand-name">CYPH<span class="accent">ER</span></h1>
+          <div class="brand-tagline">Analytical Guardian</div>
+        </div>
+
+        <div class="status-bar">
+          <div class="status-item">
+            <div class="status-dot" aria-hidden="true"></div>
+            <span>SECURE</span>
+          </div>
+          <div class="status-item">
+            <span id="clock" aria-live="polite">--:--:--</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- Live Camera Stream -->
+      <section class="camera-section">
+        <div class="section-title">LIVE VISUAL FEED</div>
+        
+        <div class="camera-container" id="camera-wrapper">
+          <img 
+            id="camera-stream" 
+            src="{{ stream_url }}" 
+            alt="Live camera feed from Cypher"
+            onerror="this.onerror=null; this.src=''; this.alt='Camera stream unavailable. Check stream service.';"
+          >
+          
+          <div class="live-badge" aria-hidden="true">
+            <span>LIVE</span>
+          </div>
+
+          <div class="stream-controls">
+            <button class="stream-btn" onclick="refreshStream()" title="Refresh camera stream">
+              REFRESH
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Control Access -->
+      <section class="controls-section">
+        <div class="section-title">OPERATIONS</div>
+        
+        <div class="control-card">
+          <p>
+            Access the onboard control systems for direct manual operation, 
+            diagnostics, and calibration routines.
+          </p>
+          
+          <a href="{{ control_url }}" 
+             target="_blank" 
+             rel="noopener noreferrer"
+             class="btn-primary">
+            LAUNCH MANUAL CONTROLS
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      CYPH ER // TAILNET SECURE // OBSERVING
+    </footer>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
