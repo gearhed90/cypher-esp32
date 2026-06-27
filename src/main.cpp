@@ -1,4 +1,4 @@
-#include <WiFi.h>
+#in.clude <WiFi.h>
 #include <WebServer.h>
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
@@ -37,7 +37,7 @@ float throttle = 0.0;        // base speed command (throttle / speed)
 int steering = 0;            // turn command from UI
 int steeringTrim = 0;
 
-bool straightHoldEnabled = true;  // master enable for yaw correction / straight tracking
+bool straightHoldEnabled = false;  // master enable for yaw correction / straight tracking
 float roll = 0;              // for optional display / debug (from accel)
 unsigned long lastUpdateTime = 0;
 
