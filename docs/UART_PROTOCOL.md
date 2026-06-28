@@ -1,68 +1,72 @@
-# UART Communication Protocol (Pi ↔ ESP32)
+# Cypher UART Communication Protocol
 
-This document defines the planned communication protocol between the Raspberry Pi and the ESP32.
+This document describes the reliable UART communication protocol between the Raspberry Pi and the ESP32.
 
-## Goals
+## Overview
 
-- Simple and reliable
-- Easy to extend without breaking existing commands
-- Clear separation between high-level commands (Pi) and low-level motor control (ESP32)
-- Include basic connection monitoring (heartbeat)
+- **Purpose**: Allow the Raspberry Pi to send movement commands to the ESP32 and receive status/acknowledgments.
+- **Physical Layer**: UART (Serial2 on ESP32, `/dev/serial0` on Raspberry Pi)
+- **Baud Rate**: 115200
+- **Data Format**: 8N1 (8 data bits, no parity, 1 stop bit)
+- **Safety Feature**: The ESP32 has a 1.5-second motor safety timeout. If no command is received for more than 1.5 seconds, the motors are automatically stopped.
 
-## Current Status
+## Wiring
 
-**Not yet implemented.** This document serves as the design spec for Phase 2.
+| ESP32          | Raspberry Pi     | Direction     | Purpose                  |
+|----------------|------------------|---------------|--------------------------|
+| GPIO 18 (TX2)  | GPIO 10 (Pin 19) | ESP32 → Pi    | Data from ESP32 to Pi    |
+| GPIO 19 (RX2)  | GPIO 8  (Pin 10) | Pi → ESP32    | Data from Pi to ESP32    |
+| GND            | Any GND          | Common        | Ground reference         |
 
-## Design Principles
+## Command Protocol (Pi → ESP32)
 
-1. The **ESP32 is the authority** on motor safety.
-2. The **Pi sends high-level commands** (e.g. "move forward", "stop", "set speed").
-3. Commands should be **human-readable** when possible (easier debugging).
-4. Every command should receive an acknowledgment when practical.
+All commands are sent as plain text followed by a newline (`\n`).
 
-## Proposed Message Format
+| Command                  | Description                          | Example                  |
+|--------------------------|--------------------------------------|--------------------------|
+| `MOVE:throttle,steering` | Set motor speeds                     | `MOVE:80,25`             |
+| `STOP`                   | Emergency stop (throttle=0, steering=0) | `STOP`                |
+| `STATUS?`                | Request current status               | `STATUS?`                |
+| `HEARTBEAT`              | Keep-alive (sent automatically)      | `HEARTBEAT`              |
+| `MODE:MANUAL`            | Set manual control mode              | `MODE:MANUAL`            |
+| `MODE:AUTO`              | Set autonomous mode (future)         | `MODE:AUTO`              |
 
-**Simple text-based protocol** (one command per line, newline terminated):
-CMD:VALUE1,VALUE2,...\n
-text### Examples
+## Responses (ESP32 → Pi)
 
-| Command from Pi              | Meaning                              | ESP32 Response      |
-|-----------------------------|--------------------------------------|---------------------|
-| `MOVE:120,0`                | Move forward at speed 120            | `ACK:MOVE`          |
-| `MOVE:0,0`                  | Stop                                 | `ACK:STOP`          |
-| `MOVE:-80,40`               | Move backward + turn right           | `ACK:MOVE`          |
-| `HEARTBEAT`                 | Connection check                     | `HEARTBEAT`         |
-| `STATUS?`                   | Request current state                | `STATUS:MANUAL,0,0` |
-| `MODE:MANUAL`               | Force manual mode                    | `ACK:MODE`          |
+| Response                    | Description                              |
+|-----------------------------|------------------------------------------|
+| `ACK:MOVE`                  | Command received and applied             |
+| `ACK:STOP`                  | Emergency stop executed                  |
+| `HEARTBEAT`                 | Response to heartbeat (optional)         |
+| `STATUS:MANUAL,throttle,steering` | Current mode and motor values       |
+| `ERR:UNKNOWN_CMD`           | Command was not recognized               |
 
-### Status Response Format
-STATUS:<MODE>,<THROTTLE>,<STEERING>
-textExample: `STATUS:MANUAL,120,0`
+## Heartbeat & Safety Timeout
 
-## Safety Rules (ESP32 Side)
+- The Python bridge (`esp32_bridge.py`) automatically sends a `HEARTBEAT` command every **~800ms**.
+- This prevents the ESP32’s 1.5-second safety timeout from triggering during idle periods.
+- If the bridge stops (Pi crash, service failure, etc.), the ESP32 will automatically stop the motors after 1.5 seconds of silence.
 
-- If no valid command is received for **X** milliseconds → **stop motors**.
-- Always default to stopped on boot or lost connection.
-- Ignore invalid or malformed commands.
+## Example Session
+
+Pi  → ESP32:  MOVE:60,0
+ESP32 → Pi:   ACK:MOVE
+Pi  → ESP32:  STOP
+ESP32 → Pi:   ACK:STOP
+(Pi bridge sends HEARTBEAT every 800ms automatically)
+text## Implementation Notes
+
+- **ESP32**: Uses `Serial2` on GPIO 18 (TX) and GPIO 19 (RX). Commands are parsed in `processCommand()`.
+- **Raspberry Pi**: Uses the `ESP32Bridge` class in `pi/bridge/esp32_bridge.py`. The bridge runs as a systemd service (`cypher-bridge.service`).
+- All commands are case-sensitive.
+- The bridge uses a background thread for the heartbeat so it does not block other operations.
 
 ## Future Extensions
 
-Possible future command groups:
-
-- `HEAD:pan,tilt` — Pan/tilt camera head
-- `LIGHT:state` — Control lights
-- `CONFIG:KEY=VALUE` — Runtime configuration
-
-These will be added only after the base movement protocol is solid.
-
-## Implementation Plan
-
-1. Define exact command set for basic movement
-2. Implement simple parser on ESP32
-3. Implement sender + heartbeat on Raspberry Pi
-4. Add connection monitoring + automatic safe stop
-5. Document final protocol in this file
+- Add `MODE:AUTO` / `MODE:MANUAL` switching
+- Expand `STATUS?` response with more telemetry (battery, IMU, etc.)
+- Add checksums for noisy environments (if needed)
 
 ---
 
-Last updated: June 2026
+**Status**: Working and stable as of June 2026.

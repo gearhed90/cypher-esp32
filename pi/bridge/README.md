@@ -1,24 +1,28 @@
-# ESP32 Bridge
+# Cypher ESP32 Bridge
 
-This module provides a clean, reliable communication layer between the Raspberry Pi and the ESP32 over UART.
+This module provides reliable UART communication between the Raspberry Pi and the ESP32 motor controller.
 
-## Usage Example
+## Features
+
+- Automatic heartbeat (every ~800ms) to keep the ESP32 safety timeout happy
+- Auto-reconnect on communication failure
+- Clean command interface (`move()`, `stop()`, `get_status()`, etc.)
+- Context manager support
+
+## Usage
 
 ```python
-from pi.bridge.esp32_bridge import ESP32Bridge
-import time
+from esp32_bridge import ESP32Bridge
 
-bridge = ESP32Bridge(port='/dev/serial0', baudrate=115200)
-
-if bridge.start():
-    bridge.move(throttle=120, steering=0)   # Move forward
-    time.sleep(1)
+with ESP32Bridge() as bridge:
+    bridge.move(80, 20)
+    time.sleep(2)
     bridge.stop()
-    bridge.close()
-Features
+Protocol
+See docs/UART_PROTOCOL.md for the full command/response specification.
+Systemd Service
+The bridge runs as cypher-bridge.service and starts automatically on boot.
+Files
 
-Simple move(), stop(), get_status() interface
-Background heartbeat for connection monitoring
-Automatic safety stop if connection is lost
-Thread-safe
-Easy to integrate into the dashboard or vision code later
+esp32_bridge.py — Main bridge implementation
+cypher-bridge.service — systemd unit file
