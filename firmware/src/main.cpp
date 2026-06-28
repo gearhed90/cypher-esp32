@@ -2,6 +2,14 @@
 #include <WebServer.h>
 #include <ArduinoOTA.h>
 
+// === UART Communication with Raspberry Pi ===
+#define UART_BAUD 115200
+unsigned long lastCommandTime = 0;
+const unsigned long COMMAND_TIMEOUT = 1500; // 1.5 seconds safety timeout
+
+String inputString = "";
+bool stringComplete = false;
+
 // === MOTOR PINS (TB6612) ===
 #define AIN1 25
 #define AIN2 26
@@ -123,6 +131,40 @@ const char index_html[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
+// === UART Command Handler ===
+void processCommand(String cmd) {
+  cmd.trim();
+  lastCommandTime = millis();
+
+  if (cmd.startsWith("MOVE:")) {
+    // Format: MOVE:throttle,steering
+    int commaIndex = cmd.indexOf(',');
+    if (commaIndex > 0) {
+      throttle = cmd.substring(5, commaIndex).toInt();
+      steering = cmd.substring(commaIndex + 1).toInt();
+      updateMotors();
+      Serial2.println("ACK:MOVE");
+    }
+  }
+  else if (cmd == "STOP") {
+    throttle = 0;
+    steering = 0;
+    updateMotors();
+    Serial2.println("ACK:STOP");
+  }
+  else if (cmd == "HEARTBEAT") {
+    Serial2.println("HEARTBEAT");
+  }
+  else if (cmd == "STATUS?") {
+    // Simple status response
+    String mode = "MANUAL"; // We can expand this later
+    Serial2.printf("STATUS:%s,%d,%d\n", mode.c_str(), throttle, steering);
+  }
+  else {
+    Serial2.println("ERR:UNKNOWN_CMD");
+  }
+}
+
 // === WEB HANDLERS ===
 void handleRoot() {
   server.send(200, "text/html", index_html);
@@ -137,6 +179,9 @@ void handleControl() {
 
 void setup() {
   Serial.begin(115200);
+// UART to Raspberry Pi
+Serial2.begin(UART_BAUD);
+Serial.println("UART to Pi initialized");
   delay(800);
   Serial.println("\n=== Cypher ESP32 Starting (Manual Mode) ===");
 
@@ -186,4 +231,33 @@ void setup() {
 void loop() {
   ArduinoOTA.handle();
   server.handleClient();
+
+  // === Read commands from Raspberry Pi ===
+  while (Serial2.available()) {
+    char inChar = (char)Serial2.read();
+    inputString += inChar;
+    if (inChar == '\n') {
+      stringComplete = true;
+    }
+  }
+
+  if (stringComplete) {
+    processCommand(inputString);
+    inputString = "";
+    stringComplete = false;
+  }
+
+  // === Safety Timeout ===
+  if (millis() - lastCommandTime > COMMAND_TIMEOUT) {
+    if (throttle != 0 || steering != 0) {
+      throttle = 0;
+      steering = 0;
+      updateMotors();
+      // Optional: only print once when timeout triggers
+      // Serial.println("Safety stop triggered");
+    }
+  }
+
+  // Small delay to keep things responsive
+  delay(10);
 }
