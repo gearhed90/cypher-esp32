@@ -7,21 +7,21 @@
 
 Cypher uses a clear separation of responsibilities:
 
-- The **Raspberry Pi 4** is the central brain and the **only control interface**.
+- The **Raspberry Pi 4** is the central brain and the intended control interface.
 - The **ESP32** is a dedicated motor controller that receives commands over UART and enforces a safety timeout.
 
-All higher-level logic (dashboard, future vision, autonomy, remote access) lives on the Pi. The ESP32 stays simple and predictable.
+All higher-level logic (dashboard, future vision, autonomy, remote access) lives on the Pi. The ESP32 stays simple and deterministic.
 
 ## System Components
 
 | Component | Role | Location | Notes |
 |-----------|------|----------|-------|
-| Dashboard (Flask) | Main control UI + status | `pi/dashboard/app.py` | Runs on port 5000 |
-| ESP32Bridge | UART communication + heartbeat | `pi/bridge/esp32_bridge.py` | Owned by the dashboard process |
-| ESP32 Firmware | Motor control + 1.5 s safety timeout | `firmware/src/main.cpp` | Currently still contains residual web-server code |
+| Dashboard (Flask) | Monitoring UI + future control surface | `pi/dashboard/` | Currently shows camera + link; full control integration still pending |
+| ESP32Bridge | UART communication + heartbeat | `pi/bridge/esp32_bridge.py` | Ready for use by the dashboard |
+| ESP32 Firmware | Motor control + 1.5 s safety timeout | `firmware/src/main.cpp` | **Pure motor controller** (WiFi/WebServer removed July 24) |
 | Camera Stream | Live video | External service (port 8080) | Handled by Pi |
 
-## Communication Flow
+## Communication Flow (Intended)
 
 ```
 Dashboard (Pi)
@@ -37,30 +37,19 @@ ESP32 (motor controller)
 - ESP32 automatically stops motors if no command arrives for 1.5 seconds.
 - Heartbeat from the Pi prevents the timeout during normal operation.
 
-## Control Methods (Dashboard)
+## Current vs Intended Control Path
 
-- On-screen directional buttons
-- Keyboard arrow keys (supports combined forward + turn)
-- Spacebar = emergency stop
-- Speed slider
+| Aspect | Current (July 24) | Intended Foundation end-state |
+|--------|-------------------|-------------------------------|
+| ESP32 | Pure UART motor controller | Same |
+| Dashboard | Camera viewer + link button | Full on-screen buttons + keyboard that call the bridge |
+| Control traffic | Still partially external | 100 % through ESP32Bridge |
 
 ## Safety Features
 
 - **1.5-second motor timeout** on the ESP32
-- Automatic heartbeat from the Pi bridge
+- Automatic heartbeat from the Pi bridge (when the bridge is running)
 - Motors stop if the Pi crashes, the service dies, or the serial link is lost
-
-## Current Services
-
-| Service | Status | Purpose |
-|---------|--------|---------|
-| `cypher-dashboard.service` | Running | Web UI and robot control |
-| `cypher-bridge.service` | Stopped | Not used — dashboard owns the serial port |
-
-## Residual Code Note
-
-`firmware/src/main.cpp` still contains WiFi connection logic, a WebServer, and an HTML control page from an earlier design phase.  
-**This residual code should be removed** as part of Foundation work so the ESP32 becomes a pure UART motor controller (no web server, WiFi optional / disabled by default).
 
 ## Guiding Principles
 

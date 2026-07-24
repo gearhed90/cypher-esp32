@@ -1,6 +1,15 @@
-#include <WiFi.h>
-#include <WebServer.h>
-#include <ArduinoOTA.h>
+/*
+ * Cypher ESP32 — Pure Motor Controller
+ *
+ * Receives commands over UART from the Raspberry Pi and drives the
+ * TB6612FNG motors. Enforces a 1.5-second safety timeout.
+ *
+ * No WiFi, no web server, no OTA. All higher-level control lives on the Pi.
+ *
+ * Protocol: see docs/UART_PROTOCOL.md
+ */
+
+#include <Arduino.h>
 
 // === UART Communication with Raspberry Pi ===
 #define UART_BAUD 115200
@@ -10,7 +19,7 @@ const unsigned long COMMAND_TIMEOUT = 1500; // 1.5 seconds safety timeout
 String inputString = "";
 bool stringComplete = false;
 
-// === MOTOR PINS (TB6612) ===
+// === MOTOR PINS (TB6612FNG) ===
 #define AIN1 25
 #define AIN2 26
 #define PWMA 27
@@ -18,18 +27,10 @@ bool stringComplete = false;
 #define BIN2 32
 #define PWMB 14
 
-// === WIFI ===
-const char* ssid_home = "MBPriv";
-const char* password_home = "mbsecur3";
-const char* ssid_work = "TMOBILE-9DD1";
-const char* password_work = "mcmahan12";
-
 // === MOTOR STATE ===
 int throttle = 0;     // -255 to 255
 int steering = 0;     // -255 to 255
-int steeringTrim = 0;
-
-WebServer server(80);
+int steeringTrim = 0; // reserved for future mechanical trim
 
 // === MOTOR CONTROL ===
 void setTankMotors(int left, int right) {
@@ -70,67 +71,6 @@ void updateMotors() {
   setTankMotors(left, right);
 }
 
-// === WEB UI (Manual Only) ===
-const char index_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: Arial; text-align: center; background: #222; color: white; }
-    .button { width: 90px; height: 90px; font-size: 28px; margin: 8px; border-radius: 12px; }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); max-width: 320px; margin: 20px auto; }
-    .stop { background: #c33; color: white; font-weight: bold; }
-    .slider-container { margin: 20px 0; }
-  </style>
-</head>
-<body>
-  <h2>Cypher - Manual Control</h2>
-
-  <div class="grid">
-    <div></div>
-    <button class="button" onmousedown="sendCmd('forward')" onmouseup="sendCmd('stop')" ontouchstart="sendCmd('forward')" ontouchend="sendCmd('stop')">↑</button>
-    <div></div>
-
-    <button class="button" onmousedown="sendCmd('left')" onmouseup="sendCmd('stop')" ontouchstart="sendCmd('left')" ontouchend="sendCmd('stop')">←</button>
-    <button class="button stop" onclick="sendCmd('stop')">STOP</button>
-    <button class="button" onmousedown="sendCmd('right')" onmouseup="sendCmd('stop')" ontouchstart="sendCmd('right')" ontouchend="sendCmd('stop')">→</button>
-
-    <div></div>
-    <button class="button" onmousedown="sendCmd('back')" onmouseup="sendCmd('stop')" ontouchstart="sendCmd('back')" ontouchend="sendCmd('stop')">↓</button>
-    <div></div>
-  </div>
-
-  <div class="slider-container">
-    <label>Speed: <span id="speedVal">120</span></label><br>
-    <input type="range" min="0" max="255" value="120" step="5" oninput="updateSpeed(this.value)">
-  </div>
-
-  <script>
-    let speed = 120;
-
-    function updateSpeed(val) {
-      speed = parseInt(val);
-      document.getElementById('speedVal').innerText = speed;
-    }
-
-    function sendCmd(cmd) {
-      let thr = 0;
-      let steer = 0;
-
-      if (cmd === 'forward') thr = speed;
-      if (cmd === 'back')    thr = -speed;
-      if (cmd === 'left')    steer = -speed;
-      if (cmd === 'right')   steer = speed;
-      if (cmd === 'stop')    { thr = 0; steer = 0; }
-
-      fetch('/control?throttle=' + thr + '&steering=' + steer);
-    }
-  </script>
-</body>
-</html>
-)rawliteral";
-
 // === UART Command Handler ===
 void processCommand(String cmd) {
   cmd.trim();
@@ -156,82 +96,38 @@ void processCommand(String cmd) {
     Serial2.println("HEARTBEAT");
   }
   else if (cmd == "STATUS?") {
-    // Simple status response
-    String mode = "MANUAL"; // We can expand this later
+    String mode = "MANUAL";
     Serial2.printf("STATUS:%s,%d,%d\n", mode.c_str(), throttle, steering);
   }
-  else {
+  else if (cmd.length() > 0) {
     Serial2.println("ERR:UNKNOWN_CMD");
   }
 }
 
-// === WEB HANDLERS ===
-void handleRoot() {
-  server.send(200, "text/html", index_html);
-}
-
-void handleControl() {
-  if (server.hasArg("throttle")) throttle = server.arg("throttle").toInt();
-  if (server.hasArg("steering")) steering = server.arg("steering").toInt();
-  updateMotors();
-  server.send(200, "text/plain", "OK");
-}
-
 void setup() {
   Serial.begin(115200);
-// UART to Raspberry Pi
-Serial2.begin(UART_BAUD);
-Serial.println("UART to Pi initialized");
-  delay(800);
-  Serial.println("\n=== Cypher ESP32 Starting (Manual Mode) ===");
+  Serial2.begin(UART_BAUD);
+
+  delay(200);
+  Serial.println();
+  Serial.println("=== Cypher ESP32 — Motor Controller ===");
+  Serial.println("UART ready. Waiting for commands from Pi.");
+  Serial.println("Safety timeout: 1500 ms");
 
   // Motor pins
-  pinMode(AIN1, OUTPUT); pinMode(AIN2, OUTPUT); pinMode(PWMA, OUTPUT);
-  pinMode(BIN1, OUTPUT); pinMode(BIN2, OUTPUT); pinMode(PWMB, OUTPUT);
+  pinMode(AIN1, OUTPUT);
+  pinMode(AIN2, OUTPUT);
+  pinMode(PWMA, OUTPUT);
+  pinMode(BIN1, OUTPUT);
+  pinMode(BIN2, OUTPUT);
+  pinMode(PWMB, OUTPUT);
 
   // Start stopped
   setTankMotors(0, 0);
-
-  // WiFi
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid_home, password_home);
-  Serial.print("Connecting to WiFi");
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 8000) {
-    delay(400); Serial.print(".");
-  }
-
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("\nTrying work WiFi...");
-    WiFi.begin(ssid_work, password_work);
-    start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < 8000) {
-      delay(400); Serial.print(".");
-    }
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi connected! IP: " + WiFi.localIP().toString());
-  } else {
-    Serial.println("\nWiFi connection failed!");
-  }
-
-  // OTA
-  ArduinoOTA.setHostname("cypher-esp32");
-  ArduinoOTA.begin();
-  Serial.println("OTA ready");
-
-  // Web server
-  server.on("/", handleRoot);
-  server.on("/control", handleControl);
-  server.begin();
-  Serial.println("Web server started");
+  lastCommandTime = millis();   // prevent immediate timeout on boot
 }
 
 void loop() {
-  ArduinoOTA.handle();
-  server.handleClient();
-
   // === Read commands from Raspberry Pi ===
   while (Serial2.available()) {
     char inChar = (char)Serial2.read();
@@ -253,11 +149,10 @@ void loop() {
       throttle = 0;
       steering = 0;
       updateMotors();
-      // Optional: only print once when timeout triggers
+      // Uncomment for debug visibility:
       // Serial.println("Safety stop triggered");
     }
   }
 
-  // Small delay to keep things responsive
-  delay(10);
+  delay(5);   // keep loop responsive without busy-waiting
 }

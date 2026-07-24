@@ -14,19 +14,21 @@ Focus areas that must be solid before adding complex features:
 
 - Reliable remote access to the dashboard
 - Smooth and balanced motor control
-- Clean ESP32 firmware (remove residual web-server code)
+- Clean ESP32 firmware (done)
+- Dashboard that actually drives the motors via the bridge
 - Proper, up-to-date documentation
 - Clean power distribution and lid-mounted electronics + cooling
 
 ## Roadmap
 
-### Phase 1: Stable Manual Foundation — Largely Complete
+### Phase 1: Stable Manual Foundation
 - [x] Remove autonomous / straight-tracking logic from ESP32
-- [x] Establish clean manual tank-drive control
+- [x] Establish clean manual tank-drive control on the ESP32 side
 - [x] Project reorganization (`firmware/` + `pi/`)
 - [x] Basic UART protocol + heartbeat + safety timeout
-- [ ] Remove residual WiFi/WebServer code from ESP32 firmware
-- [ ] Final documentation lock-in (this commit)
+- [x] Remove residual WiFi/WebServer/OTA code from ESP32 (July 24)
+- [x] Documentation lock-in
+- [ ] Wire ESP32Bridge into the dashboard UI (buttons + keyboard → MOVE/STOP)
 
 ### Phase 2: Reliability & Boot Behavior
 - [ ] Harden systemd services (dashboard auto-start, logging, restart-on-failure)

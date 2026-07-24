@@ -5,13 +5,25 @@
 
 ## Working
 
-- Manual tank-drive control from the Pi dashboard (buttons + keyboard)
-- Combined movement (forward + turning simultaneously)
-- Speed slider
-- UART command protocol (`MOVE`, `STOP`, `HEARTBEAT`, `STATUS?`)
+- UART command protocol (`MOVE`, `STOP`, `HEARTBEAT`, `STATUS?`) fully implemented on ESP32
 - 1.5-second safety timeout on the ESP32
-- Automatic heartbeat from the Pi bridge (~800 ms)
-- `cypher-dashboard.service` starts and runs the control interface
+- ESP32Bridge class with automatic heartbeat (~800 ms)
+- `cypher-dashboard.service` can start the monitoring interface
+- Camera stream embedding in the dashboard (when stream service is running)
+
+## Firmware Status (July 24 2026)
+
+- **ESP32 is now a pure motor controller.**  
+  Residual WiFi, WebServer, OTA, HTML UI, and hardcoded credentials have been removed.  
+  The firmware only listens on UART and drives the motors with the safety timeout.
+
+## Dashboard Status (Accurate)
+
+The current dashboard is a **monitoring / status page**:
+- Live camera stream
+- Link button that opens the control interface
+
+Full on-screen directional buttons + keyboard control that talk directly to the ESP32Bridge are **not yet wired into the dashboard UI**. That integration remains a Foundation task.
 
 ## Hardware Progress (July 2026)
 
@@ -21,28 +33,27 @@
 
 ## Known Gaps / Foundation Work Remaining
 
-1. **ESP32 firmware cleanup** — residual WiFi + WebServer code is still present and should be removed so the ESP32 is a pure motor controller.
-2. **Remote access hardening** — reliable Tailscale + nginx access to the *dashboard* (not the old ESP32 web UI).
-3. **Documentation lock-in** — this set of docs (July 24) is the current single source of truth.
-4. **Motor balancing / smooth control** — continue refining throttle/steering response and any mechanical trim.
-5. **Clean power distribution & lid electronics** — still part of the Foundation checklist.
+1. **Dashboard control integration** — wire the ESP32Bridge into the dashboard so buttons/keyboard send `MOVE`/`STOP` directly (instead of linking out to an old web UI).
+2. **Remote access hardening** — reliable Tailscale + optional nginx access to the dashboard.
+3. **Motor balancing / smooth control** — refine throttle/steering response and any mechanical trim.
+4. **Clean power distribution & lid electronics**.
+5. Mechanical track completion (tensioner wheel, sprocket, full modules).
 
 ## Services Snapshot
 
 | Service | Status | Notes |
 |---------|--------|-------|
-| `cypher-dashboard.service` | Running | Primary control interface |
-| `cypher-bridge.service` | Stopped | Intentionally unused |
+| `cypher-dashboard.service` | Available | Starts the monitoring UI |
+| `cypher-bridge.service` | Stopped | Intentionally unused for now |
 
 ## Access
 
 - Local dashboard: `http://cypher:5000`
 - Remote: via Tailscale to the Raspberry Pi
-- ESP32 is currently often left on USB for monitoring during development
 
 ## Notes
 
-- All control traffic goes through the Pi. The ESP32 no longer hosts a production web UI.
+- All production motor commands should go through UART from the Pi.
 - Future features (vision, arms, autonomy) stay parked until the Foundation is solid.
 
 ---
