@@ -1,14 +1,15 @@
 # Cypher UART Communication Protocol
 
-This document describes the reliable UART communication protocol between the Raspberry Pi and the ESP32.
+**Last Updated:** July 24, 2026  
+**Status:** Working and stable
 
 ## Overview
 
-- **Purpose**: Allow the Raspberry Pi to send movement commands to the ESP32 and receive status/acknowledgments.
+- **Purpose**: Reliable command channel from Raspberry Pi → ESP32 for motor control and safety.
 - **Physical Layer**: UART (Serial2 on ESP32, `/dev/serial0` on Raspberry Pi)
 - **Baud Rate**: 115200
-- **Data Format**: 8N1 (8 data bits, no parity, 1 stop bit)
-- **Safety Feature**: The ESP32 has a 1.5-second motor safety timeout. If no command is received for more than 1.5 seconds, the motors are automatically stopped.
+- **Data Format**: 8N1
+- **Safety**: ESP32 stops motors if no command is received for 1.5 seconds.
 
 ## Wiring
 
@@ -18,55 +19,48 @@ This document describes the reliable UART communication protocol between the Ras
 | GPIO 19 (RX2)  | GPIO 8  (Pin 10) | Pi → ESP32    | Data from Pi to ESP32    |
 | GND            | Any GND          | Common        | Ground reference         |
 
-## Command Protocol (Pi → ESP32)
+## Commands (Pi → ESP32)
 
-All commands are sent as plain text followed by a newline (`\n`).
+All commands are plain text followed by a newline (`\n`).
 
-| Command                  | Description                          | Example                  |
-|--------------------------|--------------------------------------|--------------------------|
-| `MOVE:throttle,steering` | Set motor speeds                     | `MOVE:80,25`             |
-| `STOP`                   | Emergency stop (throttle=0, steering=0) | `STOP`                |
-| `STATUS?`                | Request current status               | `STATUS?`                |
-| `HEARTBEAT`              | Keep-alive (sent automatically)      | `HEARTBEAT`              |
-| `MODE:MANUAL`            | Set manual control mode              | `MODE:MANUAL`            |
-| `MODE:AUTO`              | Set autonomous mode (future)         | `MODE:AUTO`              |
+| Command                  | Description                              | Example            |
+|--------------------------|------------------------------------------|--------------------|
+| `MOVE:throttle,steering` | Set motor speeds (−255…255)              | `MOVE:80,25`       |
+| `STOP`                   | Emergency stop (throttle=0, steering=0)  | `STOP`             |
+| `HEARTBEAT`              | Keep-alive (sent automatically by bridge)| `HEARTBEAT`        |
+| `STATUS?`                | Request current status                   | `STATUS?`          |
+| `MODE:MANUAL`            | Set manual control mode (future use)     | `MODE:MANUAL`      |
+| `MODE:AUTO`              | Set autonomous mode (future)             | `MODE:AUTO`        |
 
 ## Responses (ESP32 → Pi)
 
-| Response                    | Description                              |
-|-----------------------------|------------------------------------------|
-| `ACK:MOVE`                  | Command received and applied             |
-| `ACK:STOP`                  | Emergency stop executed                  |
-| `HEARTBEAT`                 | Response to heartbeat (optional)         |
-| `STATUS:MANUAL,throttle,steering` | Current mode and motor values       |
-| `ERR:UNKNOWN_CMD`           | Command was not recognized               |
+| Response                          | Description                          |
+|-----------------------------------|--------------------------------------|
+| `ACK:MOVE`                        | MOVE command accepted                |
+| `ACK:STOP`                        | STOP executed                        |
+| `HEARTBEAT`                       | Heartbeat acknowledgment (optional)  |
+| `STATUS:MANUAL,throttle,steering` | Current mode and motor values        |
+| `ERR:UNKNOWN_CMD`                 | Unrecognized command                 |
 
 ## Heartbeat & Safety Timeout
 
-- The Python bridge (`esp32_bridge.py`) automatically sends a `HEARTBEAT` command every **~800ms**.
-- This prevents the ESP32’s 1.5-second safety timeout from triggering during idle periods.
-- If the bridge stops (Pi crash, service failure, etc.), the ESP32 will automatically stop the motors after 1.5 seconds of silence.
+- The Python bridge (`esp32_bridge.py`) sends `HEARTBEAT` every **~800 ms**.
+- This keeps the ESP32’s 1.5-second safety timeout from firing during normal idle periods.
+- If the bridge or Pi stops, the ESP32 will stop the motors after 1.5 s of silence.
 
-## Example Session
+## Implementation Notes
 
-Pi  → ESP32:  MOVE:60,0
-ESP32 → Pi:   ACK:MOVE
-Pi  → ESP32:  STOP
-ESP32 → Pi:   ACK:STOP
-(Pi bridge sends HEARTBEAT every 800ms automatically)
-text## Implementation Notes
+- **ESP32**: Uses `Serial2` on GPIO 18/19. Commands parsed in `processCommand()`.
+- **Raspberry Pi**: `ESP32Bridge` class in `pi/bridge/esp32_bridge.py`. Currently run inside the dashboard process (the separate `cypher-bridge.service` is stopped).
+- Commands are case-sensitive.
+- The bridge uses a background thread for the heartbeat so it never blocks control commands.
 
-- **ESP32**: Uses `Serial2` on GPIO 18 (TX) and GPIO 19 (RX). Commands are parsed in `processCommand()`.
-- **Raspberry Pi**: Uses the `ESP32Bridge` class in `pi/bridge/esp32_bridge.py`. The bridge runs as a systemd service (`cypher-bridge.service`).
-- All commands are case-sensitive.
-- The bridge uses a background thread for the heartbeat so it does not block other operations.
+## Future Extensions (After Foundation)
 
-## Future Extensions
-
-- Add `MODE:AUTO` / `MODE:MANUAL` switching
-- Expand `STATUS?` response with more telemetry (battery, IMU, etc.)
-- Add checksums for noisy environments (if needed)
+- Expand `STATUS?` with battery, IMU, or other telemetry
+- Optional checksums if the environment becomes noisy
+- Clean mode switching once autonomy is re-introduced carefully
 
 ---
 
-**Status**: Working and stable as of June 2026.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the larger system context.

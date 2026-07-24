@@ -1,88 +1,101 @@
-# Cypher Robot - Setup Guide
+# Cypher Robot — Setup Guide
 
-This guide explains how to set up the Cypher robot from scratch using this repository.
+**Last Updated:** July 24, 2026
+
+This guide explains how to bring up the Cypher robot from this repository.
 
 ## Project Philosophy
 
-The core motor control and manual movement layer is intentionally kept **simple and stable**. All autonomous/straight-tracking logic has been removed for now. New features should be built **on top** of this foundation without modifying the base movement code.
+The core motor-control and manual-movement layer is kept **simple and stable**.  
+New features are built on top of this foundation. Do not modify the base movement code unless you are deliberately improving the Foundation itself.
 
 ## Prerequisites
 
-### For ESP32 Firmware
-- [PlatformIO](https://platformio.org/) installed (VS Code extension recommended)
-- USB-to-serial adapter (for initial flashing)
-- ESP32-WROVER-CAM board
+### ESP32
+- PlatformIO (VS Code extension recommended)
+- USB-to-serial adapter (for flashing / recovery)
+- ESP32-WROVER-CAM (or compatible)
 
-### For Raspberry Pi
+### Raspberry Pi
 - Raspberry Pi 4 (or 5)
-- Raspberry Pi OS (Bookworm or newer recommended)
+- Raspberry Pi OS (Bookworm or newer)
 - Python 3.11+
 
-## 1. ESP32 Firmware Setup
-
-1. Clone this repository:
+## 1. ESP32 Firmware
 
 ```bash
 git clone https://github.com/gearhed90/cypher-esp32.git
-cd cypher-esp32
-Open the firmware/ folder in PlatformIO (or VS Code with PlatformIO extension).
-Build and upload the firmware:
-
-Bashcd firmware
+cd cypher-esp32/firmware
 pio run --target upload
+```
 
-After flashing, the ESP32 should create a WiFi access point or connect to your configured network and serve a basic manual control web interface.
+After flashing, monitor the serial console. The ESP32 should boot, initialize UART, and wait for commands from the Pi.
 
-Note: WiFi credentials are currently hardcoded in firmware/src/main.cpp. Update them before flashing if needed.
-2. Raspberry Pi Dashboard Setup
+> **Note:** The current firmware still contains residual WiFi + WebServer code.  
+> Removing that residual code is a Foundation task. Until then, the web server may start, but the production control path is UART only.
 
-SSH into your Raspberry Pi.
-Clone the repository (or copy it over):
+## 2. Raspberry Pi Dashboard
 
-Bashgit clone https://github.com/gearhed90/cypher-esp32.git
+```bash
 cd cypher-esp32/pi/dashboard
-
-Create and activate a virtual environment:
-
-Bashpython3 -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+python app.py
+```
 
-Run the dashboard:
+Access the dashboard at:
 
-Bashpython app.py
+```
+http://<raspberry-pi-ip>:5000
+```
 
-Access the dashboard from your browser at:
+or via mDNS / Tailscale once configured.
 
-texthttp://<raspberry-pi-ip>:5000
-3. Recommended Next Steps
-After basic setup is working:
+## 3. Systemd (Recommended)
 
-Set up systemd services so everything starts automatically on boot (pi/services/)
-Establish reliable UART communication between the Pi and ESP32
-Add monitoring / status page
-Improve remote access (Tailscale, reverse proxy, etc.)
+Use the provided service file so the dashboard starts on boot:
 
-Folder Structure
-textcypher-esp32/
-├── firmware/          # ESP32 code (clean manual foundation)
+```bash
+sudo cp cypher-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now cypher-dashboard.service
+```
+
+## 4. UART Wiring
+
+See [UART_PROTOCOL.md](UART_PROTOCOL.md) for the exact pinout (GPIO 18/19 on ESP32 ↔ pins 19/10 on Pi).
+
+## Recommended Order After Basic Bring-up
+
+1. Confirm dashboard can send `MOVE` / `STOP` and that the ESP32 responds.
+2. Confirm the 1.5 s safety timeout works (stop the dashboard and watch motors stop).
+3. Clean residual web-server code from the ESP32 firmware.
+4. Harden remote access (Tailscale + nginx) — see [cypher-remote-access.md](cypher-remote-access.md).
+5. Continue mechanical track work (tensioner is already locked).
+
+## Folder Structure
+
+```
+cypher-esp32/
+├── firmware/          # ESP32 motor controller
 ├── pi/
-│   ├── dashboard/     # Flask web interface
-│   ├── vision/        # Camera + tracking code (to be added)
-│   └── services/      # systemd + startup scripts
-├── docs/
-└── README.md
-Important Notes
+│   ├── dashboard/     # Flask control UI
+│   ├── bridge/        # UART bridge class
+│   ├── services/      # systemd units
+│   └── vision/        # future work
+└── docs/
+```
 
-The current ESP32 firmware is manual control only. Autonomous behaviors have been intentionally removed to keep the base layer stable.
-Motor control logic lives in firmware/src/main.cpp and should be treated as protected code.
-When adding new features later, try to interact with the motor layer through clean interfaces rather than modifying it directly.
+## Troubleshooting
 
-Troubleshooting
+| Symptom | Checks |
+|---------|--------|
+| ESP32 silent | Serial console at 115200, power, strapping pins |
+| Dashboard cannot open serial | Permissions on `/dev/serial0`, another process holding the port |
+| Motors never stop | Confirm heartbeat is running and timeout code is active |
+| Port 5000 conflict | Change port in `app.py` or stop the conflicting service |
 
-ESP32 not responding: Check serial output during boot. Make sure WiFi credentials are correct.
-Dashboard not starting: Ensure you're inside the virtual environment and all dependencies are installed.
-Port conflicts: The dashboard runs on port 5000 by default.
+---
 
-
-Last updated: June 2026
+**Last updated:** July 24, 2026
