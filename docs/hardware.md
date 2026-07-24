@@ -106,13 +106,21 @@ This configuration remains the daily driver while tracked modules are finished.
 - Groove LED strip (when added) will also serve as status indication via color/flash patterns.
 
 ### Status
-High-level decision locked. Detailed distribution (wire gauges, bus bars, fusing, injection points for high-density LEDs) belongs in a short implementation thread when ready.
+High-level decision locked. Detailed distribution (wire gauges, bus bars, fusing, injection points for high-density LEDs) needs deeper discussion and belongs in a dedicated power-implementation thread when ready.
 
 ---
 
-## 5. Pin Map (ESP32)
+## 5. Electronics & Camera Layout (High-Level)
 
-### Motors (TB6612FNG) — Established
+- **Main electronics** (Pi, ESP32, motor driver, power conversion, future sensor electronics) stay in the **center channel**.
+- **Camera + pan-tilt head** mount on a **post rising from the center channel**.
+- This keeps mass low/central while giving the camera a clear elevated viewpoint and clean mechanical separation from the drive system.
+
+---
+
+## 6. Pin Map (ESP32)
+
+### Motors (TB6612FNG) — Locked
 
 | Function     | GPIO |
 |--------------|------|
@@ -123,36 +131,49 @@ High-level decision locked. Detailed distribution (wire gauges, bus bars, fusing
 | Right BIN2   | 32   |
 | Right PWMB   | 14   |
 
-### UART to Raspberry Pi — Established
+### UART to Raspberry Pi — Locked
 
 | Function | ESP32 GPIO | Pi side        |
 |----------|------------|----------------|
 | TX       | 18         | GPIO 10 (RX)   |
 | RX       | 19         | GPIO 8  (TX)   |
 
-### Pan-Tilt + Laser — Provisional (needs confirmation)
+### Pan-Tilt Servos — Locked
 
-| Function     | Provisional GPIO | Notes |
-|--------------|------------------|-------|
-| Pan servo    | 12               | Strapping pin — verify boot behavior |
-| Tilt servo   | 13               | |
-| Laser (KY-008) | 4              | Simple on/off |
+| Function   | GPIO | Notes |
+|------------|------|-------|
+| Pan servo  | 12   | Strapping pin. Firmware/boot must ensure it is not held in a state that prevents normal boot. |
+| Tilt servo | 13   | |
 
-These three assignments came from earlier work and are **not yet locked**. Confirm on hardware and update this table + firmware before treating them as final. GPIO 12 in particular must be checked for boot-strapping conflicts.
+### Laser — Provisional
+
+| Function       | GPIO | Notes |
+|----------------|------|-------|
+| Laser (KY-008) | 4    | Simple on/off. Still provisional until confirmed on hardware. |
 
 ---
 
-## 6. Change Log
+## 7. Boot Policy (Foundation)
+
+**Always boot to Manual + Stopped.**
+
+Motors must be off and the system must be in manual control mode after every power-up or service restart until an explicit command is received. This is a hard Foundation requirement.
+
+---
+
+## 8. Change Log
 
 | Date          | Change                                                                 | Notes |
 |---------------|------------------------------------------------------------------------|-------|
 | June 23 2026  | Major pivot to continuous TPU track + slot/groove drive               | Previous segmented track archived |
-| June 29 2026  | Body Design V2 direction started (low-profile angular, inboard pockets)| Active body direction |
-| July 23 2026  | Switched tensioner from spring to rigid adjustable                     | Springs over-compressed |
-| July 24 2026  | Track tensioner design locked (rigid sliding bar + dual M3 clamp)      | |
-| July 24 2026  | 5 V power decision recorded (TOBSUN EA75-5V, derated)                  | From archived navigation thread |
-| July 24 2026  | Provisional pan/tilt/laser pin map recorded                            | Needs hardware confirmation |
+| June 29 2026  | Body Design V2 direction started                                       | |
+| July 23 2026  | Switched tensioner from spring to rigid adjustable                     | |
+| July 24 2026  | Track tensioner design locked                                          | |
+| July 24 2026  | 5 V power decision recorded (TOBSUN EA75-5V, derated)                  | |
+| July 24 2026  | Pan/Tilt pins locked (12/13); laser still provisional                  | GPIO 12 strapping risk noted |
+| July 24 2026  | Electronics stay in center channel; camera/servo on post from channel  | |
+| July 24 2026  | Boot policy locked: always Manual + Stopped                            | |
 
 ---
 
-**Status:** Tensioner and 5 V converter decisions locked. Pin map for servos/laser still provisional. Track modules and detailed power distribution remain open implementation work.
+**Status:** Tensioner, 5 V converter choice, pan/tilt pins, layout concept, and boot policy locked. Laser pin and detailed power distribution still open.

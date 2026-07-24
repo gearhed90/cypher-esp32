@@ -4,56 +4,54 @@
 
 ## Core Philosophy
 
-The foundation of this project is **stable, predictable manual control**.
+Stable, predictable manual control first. New features are layered on top; they do not rewrite the core.
 
-Motor control, basic movement, and the communication layer between the Pi and ESP32 must remain reliable. New features are built **on top** of this foundation rather than modifying the core movement logic directly.
+## Foundation Definition
 
-## Current Phase: Foundation (Active)
+The robot is considered past Foundation when:
 
-## Roadmap
+- A human can reliably drive it remotely
+- It always boots to Manual + Stopped
+- Power is clean and documented
+- Core docs match reality
+- Sensors and higher features can be added without touching motor control
 
-### Phase 1: Stable Manual Foundation
-- [x] Remove autonomous / straight-tracking logic from ESP32
-- [x] Establish clean manual tank-drive control on the ESP32 side
-- [x] Project reorganization (`firmware/` + `pi/`)
-- [x] Basic UART protocol + heartbeat + safety timeout
-- [x] Remove residual WiFi/WebServer/OTA code from ESP32
-- [x] Documentation lock-in
-- [x] Wire ESP32Bridge into the dashboard UI (buttons + keyboard → MOVE/STOP)
+## Phase 1 — Foundation (Active)
 
-### Phase 2: Reliability & Boot Behavior
-- [ ] Harden systemd services (dashboard auto-start, logging, restart-on-failure)
-- [ ] Safe default boot state (always Manual + Stopped)
-- [ ] Robust serial auto-reconnect and health reporting
-- [ ] Clean power distribution and lid electronics layout
-- [ ] Ensure `sentry` user is in `dialout` for serial access
+**Done**
+- Clean ESP32 motor controller
+- Dashboard owns motors (buttons, keyboard, discrete speed)
+- UART protocol + safety timeout
+- Documentation lock-in
+- Track tensioner design
+- 5 V converter choice (TOBSUN)
+- Pan/Tilt pins locked (12/13)
+- Boot policy: always Manual + Stopped
+- Electronics layout concept (center channel + camera post)
 
-### Phase 3: Remote Access & Observability
-- [ ] Reliable Tailscale + nginx access to the dashboard
-- [ ] Simple robot status page (ESP32 health, services, camera, battery later)
-- [ ] Documented recovery procedures for ESP32 and Pi
+**Still open**
+- Laser pin confirmation
+- Detailed 5 V distribution (deeper discussion needed)
+- Remote-access hardening → thread “Cypher Remote Control”
+- Motor balancing / smooth open-loop feel (discussion needed)
+- Systemd enforcement of boot-to-stopped
 
-### Phase 4: Mechanical Completion (Tracks)
-- [x] Track tensioner design locked (rigid sliding bar + dual M3)
-- [ ] Finalize tensioner wheel + axle retention
-- [ ] Finalize continuous TPU track geometry and sprocket
-- [ ] Suspension geometry and travel
-- [ ] Full tracked modules installed and tested
+## Phase 2 — Sensors & Closed-Loop (next major design)
+- Hall sensors + AS5600
+- Pi-side straight-line assist
+- Rear ToF / ultrasonic, later lidar
+- All sensing stays on the Pi
 
-### Phase 5: Future Capabilities (After Foundation)
-- Vision / object tracking
-- Retractable / foldable arms
-- Carefully re-introduce limited autonomy on top of the stable base
-- Enhanced UI feedback and telemetry
+## Phase 3 — Mechanical completion
+- Full tracked modules
+- Final body / channel details
 
-## Guiding Principles
-
-1. Protect the Foundation.
-2. Layered architecture — new capabilities talk to motors only through UART.
-3. Reproducibility.
-4. Incremental progress.
-5. Documentation stays current.
+## Phase 4 — Future utilities
+- Groove LEDs / status lighting
+- Laser cat-play mode
+- Retractable arms
+- Vision tracking and limited autonomy
 
 ---
 
-Priority remains finishing Foundation before expanding scope.
+Priority remains finishing the remaining Foundation gaps before opening the sensor thread in earnest.

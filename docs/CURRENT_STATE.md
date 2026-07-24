@@ -5,53 +5,48 @@
 
 ## Working
 
-- UART command protocol (`MOVE`, `STOP`, `HEARTBEAT`, `STATUS?`) on ESP32
-- 1.5-second safety timeout on the ESP32
-- ESP32Bridge with automatic heartbeat (~800 ms)
-- **Dashboard owns motor control** — on-screen D-pad, speed slider, keyboard arrows + Space, emergency stop
-- API endpoints `/api/move`, `/api/stop`, `/api/status`
-- Camera stream embedding (when stream service is running)
-- Graceful offline mode when the serial port cannot be opened
+- UART command protocol and 1.5 s safety timeout
+- ESP32 pure motor controller (no WiFi / web server)
+- Dashboard owns motor control (D-pad, keyboard, 10 % speed steps via number keys)
+- Track tensioner design locked
+- 5 V converter decision locked (TOBSUN EA75-5V)
+- Pan/Tilt pins locked (GPIO 12 / 13)
+- Boot policy locked: always Manual + Stopped
+- High-level electronics layout: center channel + camera post
 
-## Firmware Status
+## Foundation Definition (Review)
 
-- ESP32 is a pure UART motor controller (WiFi / WebServer / OTA removed).
+Foundation means the robot is:
 
-## Dashboard Status
+1. Reliably controllable by a human over a remote link
+2. Electrically and mechanically safe on every boot (motors off, manual mode)
+3. Documented accurately
+4. Powered cleanly enough for daily use
+5. Ready for sensors and higher features to be added without rewriting the core
 
-The dashboard is now the single control interface:
-- Live camera feed
-- Directional buttons (hold to drive, release to stop)
-- Keyboard support (arrows + Space)
-- Speed slider (live update while moving)
-- Connection status indicator
+It does **not** require closed-loop driving, obstacle avoidance, LEDs, arms, or autonomy.
 
-## Hardware Progress (July 2026)
+## Remaining Foundation Gaps
 
-- Track tensioner design **locked**: rigid sliding bar + dual M3 clamp, ~30 mm travel
-- Continuous TPU track direction remains the target
-- Body still on wheeled platform while tracked modules are finalized
+| Item | Status |
+|------|--------|
+| Laser pin confirmation | Provisional (GPIO 4) |
+| Detailed 5 V distribution (wiring, fusing, injection) | Needs deeper discussion |
+| Remote-access hardening | Owned by thread “Cypher Remote Control” |
+| Motor balancing / smooth open-loop feel | Needs discussion |
+| Systemd hardening to enforce boot-to-stopped | Confirmed as required; implementation pending |
+| Lid / channel mechanical details | Concept locked; detailed design later |
 
-## Known Gaps / Foundation Work Remaining
+## Future (explicitly out of Foundation)
 
-1. **Remote access hardening** — reliable Tailscale + optional nginx to the dashboard.
-2. **Motor balancing / smooth control** — refine throttle/steering response and mechanical trim.
-3. **Clean power distribution & lid electronics**.
-4. Mechanical track completion (tensioner wheel, sprocket, full modules).
-5. On the Pi: ensure the `sentry` user is in the `dialout` group so `/dev/serial0` is accessible.
-
-## Services Snapshot
-
-| Service | Status | Notes |
-|---------|--------|-------|
-| `cypher-dashboard.service` | Available | Starts UI + owns the serial bridge |
-| `cypher-bridge.service` | Stopped | Intentionally unused |
-
-## Access
-
-- Local dashboard: `http://cypher:5000`
-- Remote: via Tailscale to the Raspberry Pi
+- Hall + AS5600 + closed-loop straight assist
+- Obstacle avoidance / lidar / ToF
+- Groove LEDs
+- Cat-play laser mode
+- Retractable arms
+- Full tracked modules
+- Vision tracking / autonomy
 
 ---
 
-See [ROADMAP.md](ROADMAP.md) and [cypher-remote-access.md](cypher-remote-access.md).
+See [ROADMAP.md](ROADMAP.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
