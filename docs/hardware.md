@@ -92,21 +92,41 @@ This configuration remains the daily driver while tracked modules are finished.
 
 ---
 
-## 4. 5 V Power Architecture (Decision Locked)
+## 4. 5 V Power Architecture (Foundation — Locked)
 
 **Battery:** 12 V pack  
-**Primary 5 V converter:** TOBSUN EA75-5V (12/24 V → 5 V, 15 A rated, metal case, screw terminals)
+**Primary 5 V converter (in use):** existing **Drok** buck converter  
+**Upgrade candidate:** TOBSUN EA75-5V (if the Drok runs out of headroom or runs hot under longer duty cycles)
 
-### Design Notes
-- Continuous load budget currently estimated ~3.5–7 A (Pi, ESP32, camera, LEDs, laser, sensors, pan-tilt servos).
-- Peaks will be higher with bright LEDs + simultaneous servo motion + future IR illuminators.
-- **Derate the TOBSUN to ~8–9 A continuous** for thermal margin.
-- Fallback plan: add a second converter and split loads if heat or voltage stability becomes an issue under real load.
-- Cooling fans run directly from the 12 V rail (not on the 5 V budget).
-- Groove LED strip (when added) will also serve as status indication via color/flash patterns.
+### Distribution plan
+- Single 5 V source (the Drok) feeding a **short distribution rail / bus** in the center channel.
+- Loads take short dedicated branches off the rail.
+- Logical branches (can be added as needed):
+  - **Brain** — Pi + ESP32 + camera
+  - **Actuators** — pan/tilt servos + laser
+  - **Future LEDs** — groove strip when added
+  - **Sensors / misc** — ToF, hall, AS5600, etc.
+- Local capacitors already placed at spike-prone points are retained.
+
+### Protection
+- Current setup has had no issues in normal use.
+- Pi has its own case fan; no chassis fans fitted yet.
+- Extra input/output fusing and per-branch protection will be added later when the robot runs for longer periods. Not required to call this Foundation decision locked.
+
+### Loads on 5 V vs 12 V
+| Load | Rail |
+|------|------|
+| Raspberry Pi 4 | 5 V |
+| ESP32 | 5 V |
+| Camera | 5 V |
+| Pan/tilt servos | 5 V |
+| Laser | 5 V |
+| Future LEDs / sensors | 5 V |
+| Drive motors (TB6612) | 12 V |
+| Chassis fans (if added) | 12 V |
 
 ### Status
-High-level decision locked. Detailed distribution (wire gauges, bus bars, fusing, injection points for high-density LEDs) needs deeper discussion and belongs in a dedicated power-implementation thread when ready.
+High-level architecture locked. Physical rail, branch wiring, and fusing details belong in an implementation pass when ready.
 
 ---
 
@@ -165,15 +185,15 @@ Motors must be off and the system must be in manual control mode after every pow
 
 | Date          | Change                                                                 | Notes |
 |---------------|------------------------------------------------------------------------|-------|
-| June 23 2026  | Major pivot to continuous TPU track + slot/groove drive               | Previous segmented track archived |
+| June 23 2026  | Major pivot to continuous TPU track + slot/groove drive               | |
 | June 29 2026  | Body Design V2 direction started                                       | |
 | July 23 2026  | Switched tensioner from spring to rigid adjustable                     | |
 | July 24 2026  | Track tensioner design locked                                          | |
-| July 24 2026  | 5 V power decision recorded (TOBSUN EA75-5V, derated)                  | |
-| July 24 2026  | Pan/Tilt pins locked (12/13); laser still provisional                  | GPIO 12 strapping risk noted |
+| July 24 2026  | Pan/Tilt pins locked (12/13); laser still provisional                  | |
 | July 24 2026  | Electronics stay in center channel; camera/servo on post from channel  | |
 | July 24 2026  | Boot policy locked: always Manual + Stopped                            | |
+| July 24 2026  | 5 V architecture locked: Drok (current) → short rail; protection later | TOBSUN = upgrade path |
 
 ---
 
-**Status:** Tensioner, 5 V converter choice, pan/tilt pins, layout concept, and boot policy locked. Laser pin and detailed power distribution still open.
+**Status:** Tensioner, 5 V architecture, pan/tilt pins, layout concept, and boot policy locked. Laser pin still provisional. Detailed rail/fusing is implementation work.
