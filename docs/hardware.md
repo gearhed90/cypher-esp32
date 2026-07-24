@@ -1,4 +1,4 @@
-# Cypher Hardware — Chassis & Tracks
+# Cypher Hardware — Chassis, Tracks & Power
 
 **Last Updated:** July 24, 2026  
 **Current Mechanical Focus:** Tracked drive system — tensioner design locked  
@@ -92,15 +92,67 @@ This configuration remains the daily driver while tracked modules are finished.
 
 ---
 
-## 4. Change Log
+## 4. 5 V Power Architecture (Decision Locked)
+
+**Battery:** 12 V pack  
+**Primary 5 V converter:** TOBSUN EA75-5V (12/24 V → 5 V, 15 A rated, metal case, screw terminals)
+
+### Design Notes
+- Continuous load budget currently estimated ~3.5–7 A (Pi, ESP32, camera, LEDs, laser, sensors, pan-tilt servos).
+- Peaks will be higher with bright LEDs + simultaneous servo motion + future IR illuminators.
+- **Derate the TOBSUN to ~8–9 A continuous** for thermal margin.
+- Fallback plan: add a second converter and split loads if heat or voltage stability becomes an issue under real load.
+- Cooling fans run directly from the 12 V rail (not on the 5 V budget).
+- Groove LED strip (when added) will also serve as status indication via color/flash patterns.
+
+### Status
+High-level decision locked. Detailed distribution (wire gauges, bus bars, fusing, injection points for high-density LEDs) belongs in a short implementation thread when ready.
+
+---
+
+## 5. Pin Map (ESP32)
+
+### Motors (TB6612FNG) — Established
+
+| Function     | GPIO |
+|--------------|------|
+| Left AIN1    | 25   |
+| Left AIN2    | 26   |
+| Left PWMA    | 27   |
+| Right BIN1   | 33   |
+| Right BIN2   | 32   |
+| Right PWMB   | 14   |
+
+### UART to Raspberry Pi — Established
+
+| Function | ESP32 GPIO | Pi side        |
+|----------|------------|----------------|
+| TX       | 18         | GPIO 10 (RX)   |
+| RX       | 19         | GPIO 8  (TX)   |
+
+### Pan-Tilt + Laser — Provisional (needs confirmation)
+
+| Function     | Provisional GPIO | Notes |
+|--------------|------------------|-------|
+| Pan servo    | 12               | Strapping pin — verify boot behavior |
+| Tilt servo   | 13               | |
+| Laser (KY-008) | 4              | Simple on/off |
+
+These three assignments came from earlier work and are **not yet locked**. Confirm on hardware and update this table + firmware before treating them as final. GPIO 12 in particular must be checked for boot-strapping conflicts.
+
+---
+
+## 6. Change Log
 
 | Date          | Change                                                                 | Notes |
 |---------------|------------------------------------------------------------------------|-------|
 | June 23 2026  | Major pivot to continuous TPU track + slot/groove drive               | Previous segmented track archived |
 | June 29 2026  | Body Design V2 direction started (low-profile angular, inboard pockets)| Active body direction |
 | July 23 2026  | Switched tensioner from spring to rigid adjustable                     | Springs over-compressed |
-| July 24 2026  | Track tensioner design locked (rigid sliding bar + dual M3 clamp)      | Current |
+| July 24 2026  | Track tensioner design locked (rigid sliding bar + dual M3 clamp)      | |
+| July 24 2026  | 5 V power decision recorded (TOBSUN EA75-5V, derated)                  | From archived navigation thread |
+| July 24 2026  | Provisional pan/tilt/laser pin map recorded                            | Needs hardware confirmation |
 
 ---
 
-**Status:** Tensioner locked. Continue with wheel/axle details, sprocket confirmation, and full track geometry while the software Foundation is finished.
+**Status:** Tensioner and 5 V converter decisions locked. Pin map for servos/laser still provisional. Track modules and detailed power distribution remain open implementation work.
