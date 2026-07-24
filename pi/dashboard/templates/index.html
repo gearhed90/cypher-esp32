@@ -18,8 +18,8 @@
 
         <div class="status-bar">
           <div class="status-item">
-            <div class="status-dot" aria-hidden="true"></div>
-            <span>SECURE</span>
+            <div class="status-dot" id="esp-status-dot" aria-hidden="true"></div>
+            <span id="esp-status-text">{{ 'ESP32 ONLINE' if bridge_ok else 'ESP32 OFFLINE' }}</span>
           </div>
           <div class="status-item">
             <span id="clock" aria-live="polite">--:--:--</span>
@@ -53,22 +53,40 @@
         </div>
       </section>
 
-      <!-- Control Access -->
+      <!-- Manual Control -->
       <section class="controls-section">
-        <div class="section-title">OPERATIONS</div>
-        
+        <div class="section-title">MANUAL DRIVE</div>
+
         <div class="control-card">
-          <p>
-            Access the onboard control systems for direct manual operation, 
-            diagnostics, and calibration routines.
-          </p>
-          
-          <a href="{{ control_url }}" 
-             target="_blank" 
-             rel="noopener noreferrer"
-             class="btn-primary">
-            LAUNCH MANUAL CONTROLS
-          </a>
+          <div class="drive-layout">
+            <!-- D-pad -->
+            <div class="dpad" id="dpad">
+              <button class="drive-btn" data-dir="forward" title="Forward (↑)">↑</button>
+              <button class="drive-btn" data-dir="left" title="Left (←)">←</button>
+              <button class="drive-btn stop" data-dir="stop" title="Stop (Space)">STOP</button>
+              <button class="drive-btn" data-dir="right" title="Right (→)">→</button>
+              <button class="drive-btn" data-dir="back" title="Back (↓)">↓</button>
+            </div>
+
+            <!-- Speed + status -->
+            <div class="drive-side">
+              <div class="speed-block">
+                <label for="speed">SPEED <span id="speed-val">120</span></label>
+                <input type="range" id="speed" min="20" max="255" value="120" step="5">
+              </div>
+
+              <div class="hint">
+                Arrow keys or buttons to drive.<br>
+                Space = emergency stop.<br>
+                Release key/button = stop.
+              </div>
+
+              <div class="conn-line">
+                <span id="conn-label">Link:</span>
+                <span id="conn-state">{{ 'UP' if bridge_ok else 'DOWN' }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>
