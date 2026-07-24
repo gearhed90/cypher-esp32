@@ -3,14 +3,43 @@
  * - Live clock
  * - Camera refresh
  * - Drive pad + keyboard → /api/move /api/stop
+ * - Discrete speed 10%–100% via number keys 1–0
  * - Periodic ESP32 status poll
  */
 
 const state = {
-  speed: 120,
-  activeDir: null,   // 'forward' | 'back' | 'left' | 'right' | null
+  percent: 50,          // 10 … 100 in steps of 10
+  activeDir: null,      // 'forward' | 'back' | 'left' | 'right' | null
   keysDown: new Set(),
 };
+
+function percentToPwm(pct) {
+  return Math.round((pct / 100) * 255);
+}
+
+function getSpeed() {
+  return percentToPwm(state.percent);
+}
+
+function updateSpeedUI() {
+  const slider = document.getElementById('speed');
+  const label = document.getElementById('speed-val');
+  if (slider) slider.value = state.percent;
+  if (label) label.textContent = state.percent + '%';
+}
+
+function setPercent(pct) {
+  // Clamp and snap to nearest 10%
+  pct = Math.max(10, Math.min(100, Math.round(pct / 10) * 10));
+  state.percent = pct;
+  updateSpeedUI();
+
+  // If currently moving, immediately re-send with new speed
+  if (state.activeDir) {
+    const cmd = dirToCommand(state.activeDir);
+    sendMove(cmd.throttle, cmd.steering);
+  }
+}
 
 function updateClock() {
   const el = document.getElementById('clock');
@@ -54,7 +83,7 @@ async function pollStatus() {
 }
 
 function dirToCommand(dir) {
-  const s = state.speed;
+  const s = getSpeed();
   switch (dir) {
     case 'forward': return { throttle: s,  steering: 0 };
     case 'back':    return { throttle: -s, steering: 0 };
@@ -132,7 +161,7 @@ function bindDpad() {
 }
 
 /* ---------- Keyboard ---------- */
-const KEY_MAP = {
+const DIR_KEYS = {
   ArrowUp: 'forward',
   ArrowDown: 'back',
   ArrowLeft: 'left',
@@ -141,8 +170,21 @@ const KEY_MAP = {
   Space: 'stop',
 };
 
+// Number keys → percent (1=10% … 9=90%, 0=100%)
+const SPEED_KEYS = {
+  '1': 10, '2': 20, '3': 30, '4': 40, '5': 50,
+  '6': 60, '7': 70, '8': 80, '9': 90, '0': 100,
+};
+
 function onKeyDown(e) {
-  const dir = KEY_MAP[e.key];
+  // Speed keys (work even while moving)
+  if (SPEED_KEYS[e.key] !== undefined) {
+    e.preventDefault();
+    setPercent(SPEED_KEYS[e.key]);
+    return;
+  }
+
+  const dir = DIR_KEYS[e.key];
   if (!dir) return;
   e.preventDefault();
   if (state.keysDown.has(e.key)) return;
@@ -156,14 +198,14 @@ function onKeyDown(e) {
 }
 
 function onKeyUp(e) {
-  const dir = KEY_MAP[e.key];
+  const dir = DIR_KEYS[e.key];
   if (!dir) return;
   e.preventDefault();
   state.keysDown.delete(e.key);
 
-  // If any movement key is still held, switch to that direction;
-  // otherwise stop.
-  const still = [...state.keysDown].map(k => KEY_MAP[k]).filter(d => d && d !== 'stop');
+  const still = [...state.keysDown]
+    .map(k => DIR_KEYS[k])
+    .filter(d => d && d !== 'stop');
   if (still.length === 0) {
     stopDir();
   } else {
@@ -171,20 +213,13 @@ function onKeyUp(e) {
   }
 }
 
-/* ---------- Speed slider ---------- */
+/* ---------- Speed slider (snaps to 10% steps) ---------- */
 function bindSpeed() {
   const slider = document.getElementById('speed');
-  const label = document.getElementById('speed-val');
-  if (!slider || !label) return;
+  if (!slider) return;
 
   slider.addEventListener('input', () => {
-    state.speed = parseInt(slider.value, 10);
-    label.textContent = state.speed;
-    // If currently moving, re-send with new speed
-    if (state.activeDir) {
-      const cmd = dirToCommand(state.activeDir);
-      sendMove(cmd.throttle, cmd.steering);
-    }
+    setPercent(parseInt(slider.value, 10));
   });
 }
 
@@ -193,16 +228,15 @@ document.addEventListener('DOMContentLoaded', () => {
   updateClock();
   setInterval(updateClock, 1000);
 
+  updateSpeedUI();          // show default 50%
   bindDpad();
   bindSpeed();
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
 
-  // Status poll every 2 s
   pollStatus();
   setInterval(pollStatus, 2000);
 
-  // Safety: stop motors if the page loses focus / is hidden
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) sendStop();
   });
