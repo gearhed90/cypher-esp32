@@ -27,10 +27,11 @@
 | Item | Status |
 |------|--------|
 | Pedestal (first version) | Done |
-| Pan drive | **Direct drive** (belt drive dropped) |
-| Pan servo mount | Cross member in the pedestal |
-| Tilt servo | In the camera head |
-| Tilt linkage | Below pivot line, attaches to the rotating base |
+| **Pan** | **Direct drive** — servo on cross member in pedestal |
+| **Tilt** | **Direct drive** — servo on the tilt pivot (linkage dropped) |
+| Pivots | Pan and tilt both ride on **bearings** |
+
+Both axes are direct drive for minimum backlash. Minor head/pedestal modifications are acceptable to make tilt geometry work.
 
 Pan/tilt GPIO: Pan = 12, Tilt = 13 (locked). GPIO 12 is a strapping pin — boot must not be held in a bad state.
 
@@ -100,8 +101,8 @@ Pan/tilt GPIO: Pan = 12, Tilt = 13 (locked). GPIO 12 is a strapping pin — boot
 | Motor mounting | Done |
 | ESP32/Pi stack mount | Designed |
 | Camera pedestal v1 | Done |
-| Pan = direct drive on cross member | Locked |
-| Tilt = head-mounted servo + linkage | Locked (detail design open) |
+| Pan = direct drive on cross member + bearings | **Locked** |
+| Tilt = direct drive on pivot + bearings | **Locked** |
 | Battery + Drok tray | Placement decided, tray to design |
 | 5 V / ground bus board | Not started |
 | Charge port + power switch (back panel) | Decided, simple |
@@ -116,8 +117,9 @@ Pan/tilt GPIO: Pan = 12, Tilt = 13 (locked). GPIO 12 is a strapping pin — boot
 |------|--------|
 | July 24 2026 | 5 V architecture, pan/tilt pins, boot policy, center-channel layout |
 | July 27 2026 | Modular track assemblies, axle system, segmented track; old tensioner obsolete |
-| July 30 2026 | Body V3; pedestal v1; direct-drive pan; tilt linkage concept; ESP32/Pi mount; back-panel power |
+| July 30 2026 | Body V3; pedestal v1; direct-drive pan; ESP32/Pi mount; back-panel power |
+| July 30 2026 | **Tilt locked to direct drive** (linkage dropped); both pivots on bearings |
 
 ---
 
-**Status:** Central body is the critical path for full track testing. Pedestal and controller mount are in place; battery/Drok tray and servo mounting details are the next design work.
+**Status:** Both pan and tilt are direct drive on bearings. Next design work: battery/Drok tray, then tilt geometry adjustments in the model.
