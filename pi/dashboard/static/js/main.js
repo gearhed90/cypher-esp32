@@ -134,11 +134,10 @@ function stopDir() {
 
 /* ---------- Button (pointer) handlers ---------- */
 function bindDpad() {
-  const dpad = document.getElementById('dpad');
-  if (!dpad) return;
-
-  dpad.querySelectorAll('.drive-btn').forEach(btn => {
+  // Bind every drive button on the page (works with dual-stick or old d-pad)
+  document.querySelectorAll('.drive-btn').forEach(btn => {
     const dir = btn.dataset.dir;
+    if (!dir) return;
 
     const onDown = (e) => {
       e.preventDefault();

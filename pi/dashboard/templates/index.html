@@ -32,15 +32,15 @@
       <!-- Live Camera Stream -->
       <section class="camera-section">
         <div class="section-title">LIVE VISUAL FEED</div>
-        
+
         <div class="camera-container" id="camera-wrapper">
-          <img 
-            id="camera-stream" 
-            src="{{ stream_url }}" 
+          <img
+            id="camera-stream"
+            src="{{ stream_url }}"
             alt="Live camera feed from Cypher"
             onerror="this.onerror=null; this.src=''; this.alt='Camera stream unavailable. Check stream service.';"
           >
-          
+
           <div class="live-badge" aria-hidden="true">
             <span>LIVE</span>
           </div>
@@ -56,37 +56,42 @@
       <!-- Manual Control -->
       <section class="controls-section">
         <div class="section-title">MANUAL DRIVE</div>
-
         <div class="control-card">
-          <div class="drive-layout">
-            <!-- D-pad -->
-            <div class="dpad" id="dpad">
-              <button class="drive-btn" data-dir="forward" title="Forward (↑)">↑</button>
-              <button class="drive-btn" data-dir="left" title="Left (←)">←</button>
+          <div class="drive-layout dual-stick">
+
+            <!-- Left stick: Forward / Reverse -->
+            <div class="stick-group">
+              <div class="stick-label">Forward / Reverse</div>
+              <button class="drive-btn" data-dir="forward" title="Forward (↑ / W)">↑</button>
               <button class="drive-btn stop" data-dir="stop" title="Stop (Space)">STOP</button>
-              <button class="drive-btn" data-dir="right" title="Right (→)">→</button>
-              <button class="drive-btn" data-dir="back" title="Back (↓)">↓</button>
+              <button class="drive-btn" data-dir="back" title="Reverse (↓ / S)">↓</button>
             </div>
 
-            <!-- Speed + status -->
+            <!-- Right stick: Left / Right -->
+            <div class="stick-group">
+              <div class="stick-label">Left / Right</div>
+              <button class="drive-btn" data-dir="left" title="Left (← / A)">←</button>
+              <button class="drive-btn stop" data-dir="stop" title="Stop (Space)">STOP</button>
+              <button class="drive-btn" data-dir="right" title="Right (→ / D)">→</button>
+            </div>
+
+            <!-- Speed -->
             <div class="drive-side">
               <div class="speed-block">
                 <label for="speed">SPEED <span id="speed-val">50%</span></label>
                 <input type="range" id="speed" min="10" max="100" value="50" step="10">
               </div>
-
               <div class="hint">
-                Arrow keys or buttons to drive.<br>
+                Arrows or WASD to drive.<br>
                 <strong>1–9 / 0</strong> = speed 10%–100%.<br>
-                Space = emergency stop.<br>
-                Release key/button = stop.
+                Space = stop.
               </div>
-
               <div class="conn-line">
                 <span id="conn-label">Link:</span>
                 <span id="conn-state">{{ 'UP' if bridge_ok else 'DOWN' }}</span>
               </div>
             </div>
+
           </div>
         </div>
       </section>

@@ -229,6 +229,7 @@ main {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 28px;
+  overflow: hidden;
 }
 
 .drive-layout {
@@ -238,21 +239,44 @@ main {
   align-items: center;
 }
 
-/* D-pad grid: 3 columns, 3 rows; center is STOP */
-.dpad {
-  display: grid;
-  grid-template-columns: repeat(3, 72px);
-  grid-template-rows: repeat(3, 72px);
-  gap: 8px;
-  justify-items: center;
-  align-items: center;
+/* Dual-stick layout */
+.drive-layout.dual-stick {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  justify-content: center;
+  align-items: flex-start;
 }
 
-.dpad .drive-btn:nth-child(1) { grid-column: 2; grid-row: 1; } /* ↑ */
-.dpad .drive-btn:nth-child(2) { grid-column: 1; grid-row: 2; } /* ← */
-.dpad .drive-btn:nth-child(3) { grid-column: 2; grid-row: 2; } /* STOP */
-.dpad .drive-btn:nth-child(4) { grid-column: 3; grid-row: 2; } /* → */
-.dpad .drive-btn:nth-child(5) { grid-column: 2; grid-row: 3; } /* ↓ */
+.stick-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+
+.stick-label {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.15rem;
+  white-space: nowrap;
+}
+
+.stick-group .drive-btn {
+  width: 64px;
+  height: 64px;
+  font-size: 1.25rem;
+}
+
+.stick-group .drive-btn.stop {
+  width: 64px;
+  height: 44px;
+  font-size: 0.75rem;
+}
 
 .drive-btn {
   width: 72px;
@@ -302,7 +326,9 @@ main {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  min-width: 200px;
+  min-width: 180px;
+  width: 100%;
+  max-width: 280px;
 }
 
 .speed-block label {
@@ -367,19 +393,41 @@ footer {
     font-size: 1.85rem;
   }
 
-  .drive-layout {
-    flex-direction: column;
-    align-items: center;
+  .controls-section {
+    max-width: 100%;
   }
 
-  .dpad {
-    grid-template-columns: repeat(3, 64px);
-    grid-template-rows: repeat(3, 64px);
+  .control-card {
+    padding: 16px;
+  }
+}
+
+/* Phone: sticks side-by-side, speed full width below */
+@media (max-width: 480px) {
+  .drive-layout.dual-stick {
+    gap: 0.75rem 1rem;
   }
 
-  .drive-btn {
-    width: 64px;
-    height: 64px;
+  .stick-group .drive-btn {
+    width: 56px;
+    height: 56px;
+    font-size: 1.15rem;
+  }
+
+  .stick-group .drive-btn.stop {
+    width: 56px;
+    height: 40px;
+    font-size: 0.7rem;
+  }
+
+  .stick-label {
+    font-size: 0.65rem;
+  }
+
+  .drive-side {
+    flex-basis: 100%;
+    max-width: none;
+    margin-top: 0.5rem;
   }
 }
 
