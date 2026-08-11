@@ -2,20 +2,83 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ title }} // Interface</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+  <title>{{ title }} // Drive</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-  <div class="container">
-    <!-- Header -->
+  <!-- ===== MOBILE LANDSCAPE DRIVE (primary for phone) ===== -->
+  <div id="mobile-drive" class="mobile-drive" aria-label="Mobile drive controls">
+    <div class="md-status">
+      <div class="status-dot" id="esp-status-dot-m" aria-hidden="true"></div>
+      <span id="esp-status-text-m">{{ 'ONLINE' if bridge_ok else 'OFFLINE' }}</span>
+      <span class="md-readout" id="md-readout">T 0 · S 0 · trim 0</span>
+    </div>
+
+    <div class="md-main">
+      <!-- Left: throttle -->
+      <div class="md-slider-col">
+        <div class="md-label">THR</div>
+        <input
+          type="range"
+          id="throttle-slider"
+          class="vert-slider"
+          min="-255" max="255" value="0" step="5"
+          orient="vertical"
+          aria-label="Throttle"
+        >
+        <div class="md-axis">FWD<br>REV</div>
+      </div>
+
+      <!-- Center: stream placeholder -->
+      <div class="md-center">
+        <div class="stream-placeholder" id="stream-placeholder">
+          <div class="ph-title">CAMERA</div>
+          <div class="ph-sub">Not installed</div>
+          <div class="ph-hint">Placeholder · stream later</div>
+        </div>
+        <!-- When camera returns, swap placeholder for:
+             <img id="camera-stream" src="{{ stream_url }}" alt="Live feed">
+        -->
+        <div class="trim-block">
+          <label for="trim-slider">TRIM <span id="trim-val">0</span></label>
+          <input type="range" id="trim-slider" min="-50" max="50" value="0" step="1" aria-label="Steering trim">
+          <div class="trim-ends"><span>L</span><span>R</span></div>
+        </div>
+      </div>
+
+      <!-- Right: steering -->
+      <div class="md-slider-col">
+        <div class="md-label">STR</div>
+        <input
+          type="range"
+          id="steer-slider"
+          class="vert-slider"
+          min="-255" max="255" value="0" step="5"
+          orient="vertical"
+          aria-label="Steering"
+        >
+        <div class="md-axis">L · R</div>
+      </div>
+    </div>
+
+    <button type="button" id="md-stop" class="md-stop-btn" title="Emergency stop">STOP</button>
+  </div>
+
+  <!-- ===== DESKTOP / PORTRAIT FALLBACK ===== -->
+  <div id="desktop-ui" class="container desktop-ui">
     <header>
       <div class="header-content">
         <div class="brand">
           <h1 class="brand-name">CYPH<span class="accent">ER</span></h1>
           <div class="brand-tagline">Analytical Guardian</div>
         </div>
-
         <div class="status-bar">
           <div class="status-item">
             <div class="status-dot" id="esp-status-dot" aria-hidden="true"></div>
@@ -29,53 +92,33 @@
     </header>
 
     <main>
-      <!-- Live Camera Stream -->
       <section class="camera-section">
         <div class="section-title">LIVE VISUAL FEED</div>
-
         <div class="camera-container" id="camera-wrapper">
-          <img
-            id="camera-stream"
-            src="{{ stream_url }}"
-            alt="Live camera feed from Cypher"
-            onerror="this.onerror=null; this.src=''; this.alt='Camera stream unavailable. Check stream service.';"
-          >
-
-          <div class="live-badge" aria-hidden="true">
-            <span>LIVE</span>
+          <div class="stream-placeholder desktop-ph">
+            <div class="ph-title">CAMERA</div>
+            <div class="ph-sub">Not installed — placeholder</div>
           </div>
-
-          <div class="stream-controls">
-            <button class="stream-btn" onclick="refreshStream()" title="Refresh camera stream">
-              REFRESH
-            </button>
-          </div>
+          <div class="live-badge" aria-hidden="true"><span>STANDBY</span></div>
         </div>
       </section>
 
-      <!-- Manual Control -->
       <section class="controls-section">
         <div class="section-title">MANUAL DRIVE</div>
         <div class="control-card">
           <div class="drive-layout dual-stick">
-
-            <!-- Left stick: Forward / Reverse -->
             <div class="stick-group">
               <div class="stick-label">Forward / Reverse</div>
-              <button class="drive-btn" data-dir="forward" title="Forward (↑ / W)">↑</button>
+              <button class="drive-btn" data-dir="forward" title="Forward (↑)">↑</button>
               <button class="drive-btn stop" data-dir="stop" title="Stop (Space)">STOP</button>
-              <button class="drive-btn" data-dir="back" title="Reverse (↓ / S)">↓</button>
+              <button class="drive-btn" data-dir="back" title="Reverse (↓)">↓</button>
             </div>
-
-            <!-- Right stick: Left / Right -->
             <div class="stick-group">
               <div class="stick-label">Left / Right</div>
-              <button class="drive-btn" data-dir="left" title="Left (← / A)">←</button>
+              <button class="drive-btn" data-dir="left" title="Left (←)">←</button>
               <button class="drive-btn stop" data-dir="stop" title="Stop (Space)">STOP</button>
-              <button class="drive-btn" data-dir="right" title="Right (→ / D)">→</button>
+              <button class="drive-btn" data-dir="right" title="Right (→)">→</button>
             </div>
-
-            <!-- Speed -->
             <div class="drive-side">
               <div class="speed-block">
                 <label for="speed">SPEED <span id="speed-val">50%</span></label>
@@ -91,15 +134,12 @@
                 <span id="conn-state">{{ 'UP' if bridge_ok else 'DOWN' }}</span>
               </div>
             </div>
-
           </div>
         </div>
       </section>
     </main>
 
-    <footer>
-      CYPH ER // TAILNET SECURE // OBSERVING
-    </footer>
+    <footer>CYPH ER // TAILNET SECURE // OBSERVING</footer>
   </div>
 
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
