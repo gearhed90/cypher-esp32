@@ -12,6 +12,8 @@
   --border-color: #1f2937;
   --success: #22c55e;
   --danger: #ef4444;
+  --thumb-size: 48px;
+  --track-thickness: 14px;
 }
 
 * { box-sizing: border-box; }
@@ -69,9 +71,10 @@ body::before {
 .md-main {
   flex: 1;
   display: grid;
-  grid-template-columns: 72px 1fr 72px;
-  gap: 8px;
-  padding: 4px 8px 8px;
+  /* Wider side columns = easier vertical slider hit area */
+  grid-template-columns: 96px 1fr 96px;
+  gap: 6px;
+  padding: 4px 6px 4px;
   min-height: 0;
 }
 
@@ -80,8 +83,10 @@ body::before {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   min-height: 0;
+  /* Expand touch zone beyond the visible track */
+  padding: 0 8px;
 }
 
 .md-label {
@@ -98,18 +103,66 @@ body::before {
   line-height: 1.2;
 }
 
-/* Vertical range slider */
+/* Shared large-thumb styles for range inputs */
+.md-slider-col input[type="range"],
+.trim-block input[type="range"] {
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Vertical throttle / steer */
 .vert-slider {
   -webkit-appearance: slider-vertical;
   appearance: slider-vertical;
   writing-mode: vertical-lr;
   direction: rtl;
-  width: 36px;
+  width: 56px;
   height: 100%;
-  max-height: 220px;
+  max-height: 280px;
   flex: 1;
-  accent-color: var(--accent-cyan);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
   touch-action: none;
+}
+
+/* WebKit vertical / generic thumbs — big hit target */
+.vert-slider::-webkit-slider-runnable-track {
+  width: var(--track-thickness);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.vert-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  margin-left: calc((var(--track-thickness) - var(--thumb-size)) / 2);
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  border: 3px solid #0a0a0f;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.45);
+  cursor: pointer;
+}
+
+.vert-slider::-moz-range-track {
+  width: var(--track-thickness);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.vert-slider::-moz-range-thumb {
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  border: 3px solid #0a0a0f;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.45);
+  cursor: pointer;
 }
 
 .md-center {
@@ -117,7 +170,7 @@ body::before {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  gap: 8px;
+  gap: 6px;
 }
 
 .stream-placeholder {
@@ -177,7 +230,46 @@ body::before {
 
 .trim-block input[type="range"] {
   width: 100%;
-  accent-color: var(--accent-cyan);
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.trim-block input[type="range"]::-webkit-slider-runnable-track {
+  height: var(--track-thickness);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.trim-block input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  margin-top: calc((var(--track-thickness) - var(--thumb-size)) / 2);
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  border: 3px solid #0a0a0f;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.45);
+  cursor: pointer;
+}
+
+.trim-block input[type="range"]::-moz-range-track {
+  height: var(--track-thickness);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.trim-block input[type="range"]::-moz-range-thumb {
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  border: 3px solid #0a0a0f;
+  cursor: pointer;
 }
 
 .trim-ends {
@@ -189,15 +281,15 @@ body::before {
 
 .md-stop-btn {
   flex-shrink: 0;
-  margin: 0 12px 8px;
-  height: 40px;
-  border-radius: 8px;
+  margin: 0 12px 10px;
+  height: 52px;
+  border-radius: 10px;
   border: 1px solid var(--danger);
   background: rgba(239, 68, 68, 0.15);
   color: var(--danger);
   font-weight: 700;
   letter-spacing: 0.12em;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   cursor: pointer;
   touch-action: manipulation;
 }
