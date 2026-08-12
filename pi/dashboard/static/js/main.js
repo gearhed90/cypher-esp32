@@ -1,6 +1,7 @@
 /**
  * Cypher Dashboard — client logic
  * - Mobile landscape: continuous throttle/steer sliders + trim
+ * - Sliders spring back to center on release (trim does not)
  * - Desktop: dual-stick buttons + keyboard
  * - Safety STOP on blur / hide / explicit stop
  */
@@ -242,26 +243,20 @@ function effectiveSteering() {
 
 function pushMobileCommand() {
   const thr = applyDeadband(state.throttle);
-  const st = effectiveSteering();
+  const rawSteer = applyDeadband(state.steering);
   updateMobileReadout();
-  if (thr === 0 && applyDeadband(state.steering) === 0 && state.trim === 0) {
-    // fully neutral — stop motors
+
+  // Both axes neutral → STOP (trim alone does not drive)
+  if (thr === 0 && rawSteer === 0) {
     if (state.moving) {
       state.moving = false;
       fetch("/api/stop", { method: "POST" }).catch(() => {});
     }
     return;
   }
-  // If only trim is non-zero but sticks centered, still don't drive
-  if (thr === 0 && applyDeadband(state.steering) === 0) {
-    if (state.moving) {
-      state.moving = false;
-      fetch("/api/stop", { method: "POST" }).catch(() => {});
-    }
-    return;
-  }
+
   state.moving = true;
-  sendMove(thr, st);
+  sendMove(thr, effectiveSteering());
 }
 
 function scheduleMobileSend() {
@@ -270,6 +265,41 @@ function scheduleMobileSend() {
     state.sendTimer = null;
     pushMobileCommand();
   }, 50); // ~20 Hz max
+}
+
+/** Snap one drive axis to center and re-evaluate motors. */
+function springAxis(axis) {
+  if (axis === "throttle") {
+    state.throttle = 0;
+    const el = document.getElementById("throttle-slider");
+    if (el) el.value = 0;
+  } else if (axis === "steer") {
+    state.steering = 0;
+    const el = document.getElementById("steer-slider");
+    if (el) el.value = 0;
+  }
+  updateMobileReadout();
+  pushMobileCommand();
+}
+
+function bindSpringReturn(el, axis) {
+  if (!el) return;
+  const onRelease = (e) => {
+    // Only spring if this pointer interaction ends (avoid double-fire)
+    e.preventDefault();
+    springAxis(axis);
+  };
+  el.addEventListener("pointerup", onRelease);
+  el.addEventListener("pointercancel", onRelease);
+  // Fallback for browsers that don't always emit pointerup on range
+  el.addEventListener("touchend", onRelease, { passive: false });
+  el.addEventListener("mouseup", onRelease);
+  el.addEventListener("change", () => {
+    // change fires on commit; if value is already 0, fine — else spring
+    // (some mobile browsers only fire change on finger lift)
+    if (axis === "throttle" && parseInt(el.value, 10) !== 0) springAxis("throttle");
+    if (axis === "steer" && parseInt(el.value, 10) !== 0) springAxis("steer");
+  });
 }
 
 function bindMobileSliders() {
@@ -284,7 +314,7 @@ function bindMobileSliders() {
       scheduleMobileSend();
     };
     thr.addEventListener("input", onThr);
-    thr.addEventListener("change", onThr);
+    bindSpringReturn(thr, "throttle");
   }
 
   if (str) {
@@ -293,15 +323,15 @@ function bindMobileSliders() {
       scheduleMobileSend();
     };
     str.addEventListener("input", onStr);
-    str.addEventListener("change", onStr);
+    bindSpringReturn(str, "steer");
   }
 
   if (trim) {
+    // Trim is intentional bias — does NOT spring back
     const onTrim = () => {
       state.trim = parseInt(trim.value, 10) || 0;
       const label = document.getElementById("trim-val");
       if (label) label.textContent = String(state.trim);
-      // Re-send if already moving so trim takes effect immediately
       if (state.moving) scheduleMobileSend();
       else updateMobileReadout();
     };
