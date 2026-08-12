@@ -1,0 +1,17 @@
+[Unit]
+Description=Cypher WiFi AP recovery (setup hotspot when offline)
+After=NetworkManager.service network-online.target
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/sentry/cypher-esp32/pi/wifi-setup
+ExecStart=/usr/bin/python3 /home/sentry/cypher-esp32/pi/wifi-setup/watchdog.py
+Restart=on-failure
+RestartSec=20
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
