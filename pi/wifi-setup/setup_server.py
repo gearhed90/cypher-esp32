@@ -49,7 +49,7 @@ PAGE = """<!DOCTYPE html>
     </label>
     <button type="submit">Connect</button>
   </form>
-  <p class="hint">After a successful connect the hotspot will shut down. Rejoin the venue Wi‑Fi and open the Tailscale address for the dashboard.</p>
+  <p class="hint">After a successful connect the hotspot will shut down. If nothing is submitted, Cypher returns to normal Wi‑Fi after about 2 minutes.</p>
 </body>
 </html>
 """
@@ -69,7 +69,6 @@ def connect_wifi(ssid: str, password: str) -> tuple[bool, str]:
     if not ssid:
         return False, "SSID is required."
 
-    # Prefer a clean connect; falls back to creating a connection profile.
     result = nmcli(
         "device", "wifi", "connect", ssid,
         "password", password,
@@ -95,7 +94,6 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self) -> None:
-        # Captive-portal friendly: any path returns the form
         page = PAGE.format(message="")
         self._send(200, page)
 
@@ -113,13 +111,10 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, PAGE.format(message=message))
 
         if ok:
-            # Give the browser time to show success, then signal exit
             def _shutdown() -> None:
                 import time
                 time.sleep(2)
-                # Stop hotspot connection if present
                 nmcli("connection", "down", "Cypher-Setup")
-                # Ask the HTTP server to stop (watchdog will exit AP mode)
                 if hasattr(self.server, "request_shutdown"):
                     self.server.request_shutdown()
 
@@ -135,19 +130,23 @@ class SetupServer(HTTPServer):
         self._stop = True
 
     def serve_until_done(self) -> None:
-        self.timeout = 1.0
+        self.timeout = 0.5
         while not self._stop:
             self.handle_request()
 
 
-def run_server(host: str = HOST, port: int = PORT) -> None:
+def run_server(host: str = HOST, port: int = PORT, server_out: list | None = None) -> SetupServer:
+    """Start serving; returns the server instance (caller may request_shutdown)."""
     server = SetupServer((host, port), Handler)
+    if server_out is not None:
+        server_out.append(server)
     print(f"[wifi-setup] Config page at http://0.0.0.0:{port}/ (try http://10.42.0.1:{port}/)")
     try:
         server.serve_until_done()
     finally:
         server.server_close()
         print("[wifi-setup] Setup server stopped")
+    return server
 
 
 if __name__ == "__main__":
