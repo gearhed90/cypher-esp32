@@ -1,9 +1,6 @@
 /**
  * Cypher Dashboard — client logic
- * - Mobile landscape: continuous throttle/steer sliders + trim
- * - Sliders spring back to center on release (trim does not)
- * - Desktop: dual-stick buttons + keyboard
- * - Safety STOP on blur / hide / explicit stop
+ * Drive + pan/tilt + status
  */
 
 const state = {
@@ -17,7 +14,7 @@ const state = {
   sendTimer: null,
 };
 
-const DEADBAND = 8; // ignore tiny slider noise near center
+const DEADBAND = 8;
 
 function percentToPwm(pct) {
   return Math.round((pct / 100) * 255);
@@ -35,7 +32,6 @@ function applyDeadband(v) {
   return Math.abs(v) < DEADBAND ? 0 : v;
 }
 
-/* ---------- Status UI (both layouts) ---------- */
 function setStatus(online) {
   document.querySelectorAll("#esp-status-dot, #esp-status-dot-m").forEach((dot) => {
     if (dot) dot.classList.toggle("offline", !online);
@@ -95,7 +91,6 @@ function updateMobileReadout() {
   el.textContent = `T ${state.throttle} · S ${st} · trim ${state.trim}`;
 }
 
-/* ---------- API ---------- */
 async function sendMove(throttle, steering) {
   try {
     const r = await fetch("/api/move", {
@@ -131,7 +126,46 @@ async function sendStop() {
   }
 }
 
-/* ---------- Desktop d-pad / keyboard ---------- */
+/* Pan / tilt */
+async function sendPanTilt(body) {
+  try {
+    const r = await fetch("/api/pan_tilt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return await r.json();
+  } catch (e) {
+    console.warn("pan_tilt failed", e);
+    return { ok: false };
+  }
+}
+
+async function centerPanTilt() {
+  try {
+    await fetch("/api/pan_tilt/center", { method: "POST" });
+  } catch (e) {
+    console.warn("center failed", e);
+  }
+}
+
+function bindPanTilt() {
+  document.querySelectorAll("[data-pt]").forEach((btn) => {
+    const kind = btn.dataset.pt;
+    const onDown = (e) => {
+      e.preventDefault();
+      if (kind === "center") {
+        centerPanTilt();
+        return;
+      }
+      const delta = parseFloat(btn.dataset.delta || "0");
+      if (kind === "pan") sendPanTilt({ pan_delta: delta });
+      if (kind === "tilt") sendPanTilt({ tilt_delta: delta });
+    };
+    btn.addEventListener("pointerdown", onDown);
+  });
+}
+
 function dirToCommand(dir) {
   const s = getSpeed();
   switch (dir) {
@@ -236,7 +270,6 @@ function bindSpeed() {
   slider.addEventListener("input", () => setPercent(parseInt(slider.value, 10)));
 }
 
-/* ---------- Mobile sliders ---------- */
 function effectiveSteering() {
   return clamp(applyDeadband(state.steering) + state.trim, -255, 255);
 }
@@ -245,8 +278,6 @@ function pushMobileCommand() {
   const thr = applyDeadband(state.throttle);
   const rawSteer = applyDeadband(state.steering);
   updateMobileReadout();
-
-  // Both axes neutral → STOP (trim alone does not drive)
   if (thr === 0 && rawSteer === 0) {
     if (state.moving) {
       state.moving = false;
@@ -254,7 +285,6 @@ function pushMobileCommand() {
     }
     return;
   }
-
   state.moving = true;
   sendMove(thr, effectiveSteering());
 }
@@ -264,10 +294,9 @@ function scheduleMobileSend() {
   state.sendTimer = setTimeout(() => {
     state.sendTimer = null;
     pushMobileCommand();
-  }, 50); // ~20 Hz max
+  }, 50);
 }
 
-/** Snap one drive axis to center and re-evaluate motors. */
 function springAxis(axis) {
   if (axis === "throttle") {
     state.throttle = 0;
@@ -285,18 +314,14 @@ function springAxis(axis) {
 function bindSpringReturn(el, axis) {
   if (!el) return;
   const onRelease = (e) => {
-    // Only spring if this pointer interaction ends (avoid double-fire)
     e.preventDefault();
     springAxis(axis);
   };
   el.addEventListener("pointerup", onRelease);
   el.addEventListener("pointercancel", onRelease);
-  // Fallback for browsers that don't always emit pointerup on range
   el.addEventListener("touchend", onRelease, { passive: false });
   el.addEventListener("mouseup", onRelease);
   el.addEventListener("change", () => {
-    // change fires on commit; if value is already 0, fine — else spring
-    // (some mobile browsers only fire change on finger lift)
     if (axis === "throttle" && parseInt(el.value, 10) !== 0) springAxis("throttle");
     if (axis === "steer" && parseInt(el.value, 10) !== 0) springAxis("steer");
   });
@@ -309,25 +334,20 @@ function bindMobileSliders() {
   const stopBtn = document.getElementById("md-stop");
 
   if (thr) {
-    const onThr = () => {
+    thr.addEventListener("input", () => {
       state.throttle = parseInt(thr.value, 10) || 0;
       scheduleMobileSend();
-    };
-    thr.addEventListener("input", onThr);
+    });
     bindSpringReturn(thr, "throttle");
   }
-
   if (str) {
-    const onStr = () => {
+    str.addEventListener("input", () => {
       state.steering = parseInt(str.value, 10) || 0;
       scheduleMobileSend();
-    };
-    str.addEventListener("input", onStr);
+    });
     bindSpringReturn(str, "steer");
   }
-
   if (trim) {
-    // Trim is intentional bias — does NOT spring back
     const onTrim = () => {
       state.trim = parseInt(trim.value, 10) || 0;
       const label = document.getElementById("trim-val");
@@ -338,7 +358,6 @@ function bindMobileSliders() {
     trim.addEventListener("input", onTrim);
     trim.addEventListener("change", onTrim);
   }
-
   if (stopBtn) {
     stopBtn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -347,15 +366,11 @@ function bindMobileSliders() {
   }
 }
 
-/* ---------- PWA ---------- */
 function registerSW() {
   if (!("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.register("/static/sw.js").catch((err) => {
-    console.warn("SW register failed", err);
-  });
+  navigator.serviceWorker.register("/static/sw.js").catch(() => {});
 }
 
-/* ---------- Init ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   updateClock();
   setInterval(updateClock, 1000);
@@ -365,6 +380,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindDpad();
   bindSpeed();
   bindMobileSliders();
+  bindPanTilt();
   registerSW();
 
   window.addEventListener("keydown", onKeyDown);

@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-  <!-- ===== MOBILE LANDSCAPE DRIVE (primary for phone) ===== -->
+  <!-- ===== MOBILE LANDSCAPE DRIVE ===== -->
   <div id="mobile-drive" class="mobile-drive" aria-label="Mobile drive controls">
     <div class="md-status">
       <div class="status-dot" id="esp-status-dot-m" aria-hidden="true"></div>
@@ -22,48 +22,38 @@
     </div>
 
     <div class="md-main">
-      <!-- Left: throttle -->
       <div class="md-slider-col">
         <div class="md-label">THR</div>
-        <input
-          type="range"
-          id="throttle-slider"
-          class="vert-slider"
-          min="-255" max="255" value="0" step="5"
-          orient="vertical"
-          aria-label="Throttle"
-        >
+        <input type="range" id="throttle-slider" class="vert-slider" min="-255" max="255" value="0" step="5" orient="vertical" aria-label="Throttle">
         <div class="md-axis">FWD<br>REV</div>
       </div>
 
-      <!-- Center: stream placeholder -->
       <div class="md-center">
-        <div class="stream-placeholder" id="stream-placeholder">
-          <div class="ph-title">CAMERA</div>
-          <div class="ph-sub">Not installed</div>
-          <div class="ph-hint">Placeholder · stream later</div>
+        <div class="camera-container" id="camera-wrapper-m">
+          <img id="camera-stream-m" src="{{ stream_url }}" alt="Live feed"
+               onerror="this.style.display='none'; const p=this.nextElementSibling; if(p) p.style.display='block';">
+          <div class="stream-placeholder" style="display:none">
+            <div class="ph-title">CAMERA</div>
+            <div class="ph-sub">Stream offline</div>
+          </div>
         </div>
-        <!-- When camera returns, swap placeholder for:
-             <img id="camera-stream" src="{{ stream_url }}" alt="Live feed">
-        -->
         <div class="trim-block">
           <label for="trim-slider">TRIM <span id="trim-val">0</span></label>
           <input type="range" id="trim-slider" min="-50" max="50" value="0" step="1" aria-label="Steering trim">
           <div class="trim-ends"><span>L</span><span>R</span></div>
         </div>
+        <div class="pt-pad" id="pt-pad-m">
+          <button type="button" class="pt-btn" data-pt="tilt" data-delta="5">↑</button>
+          <button type="button" class="pt-btn" data-pt="pan" data-delta="-10">←</button>
+          <button type="button" class="pt-btn pt-center" data-pt="center">●</button>
+          <button type="button" class="pt-btn" data-pt="pan" data-delta="10">→</button>
+          <button type="button" class="pt-btn" data-pt="tilt" data-delta="-5">↓</button>
+        </div>
       </div>
 
-      <!-- Right: steering -->
       <div class="md-slider-col">
         <div class="md-label">STR</div>
-        <input
-          type="range"
-          id="steer-slider"
-          class="vert-slider"
-          min="-255" max="255" value="0" step="5"
-          orient="vertical"
-          aria-label="Steering"
-        >
+        <input type="range" id="steer-slider" class="vert-slider" min="-255" max="255" value="0" step="5" orient="vertical" aria-label="Steering">
         <div class="md-axis">L · R</div>
       </div>
     </div>
@@ -71,7 +61,7 @@
     <button type="button" id="md-stop" class="md-stop-btn" title="Emergency stop">STOP</button>
   </div>
 
-  <!-- ===== DESKTOP / PORTRAIT FALLBACK ===== -->
+  <!-- ===== DESKTOP ===== -->
   <div id="desktop-ui" class="container desktop-ui">
     <header>
       <div class="header-content">
@@ -95,11 +85,13 @@
       <section class="camera-section">
         <div class="section-title">LIVE VISUAL FEED</div>
         <div class="camera-container" id="camera-wrapper">
-          <div class="stream-placeholder desktop-ph">
+          <img id="camera-stream" src="{{ stream_url }}" alt="Live camera feed"
+               onerror="this.style.display='none'; const p=document.getElementById('stream-fallback'); if(p) p.style.display='flex';">
+          <div id="stream-fallback" class="stream-placeholder desktop-ph" style="display:none">
             <div class="ph-title">CAMERA</div>
-            <div class="ph-sub">Not installed — placeholder</div>
+            <div class="ph-sub">Stream offline — start mjpeg_stream.py</div>
           </div>
-          <div class="live-badge" aria-hidden="true"><span>STANDBY</span></div>
+          <div class="live-badge" aria-hidden="true"><span>LIVE</span></div>
         </div>
       </section>
 
@@ -123,6 +115,16 @@
               <div class="speed-block">
                 <label for="speed">SPEED <span id="speed-val">50%</span></label>
                 <input type="range" id="speed" min="10" max="100" value="50" step="10">
+              </div>
+              <div class="pt-pad" id="pt-pad">
+                <div class="stick-label">Pan / Tilt</div>
+                <button type="button" class="pt-btn" data-pt="tilt" data-delta="5">TILT ↑</button>
+                <div class="pt-row">
+                  <button type="button" class="pt-btn" data-pt="pan" data-delta="-10">PAN ←</button>
+                  <button type="button" class="pt-btn pt-center" data-pt="center">CENTER</button>
+                  <button type="button" class="pt-btn" data-pt="pan" data-delta="10">PAN →</button>
+                </div>
+                <button type="button" class="pt-btn" data-pt="tilt" data-delta="-5">TILT ↓</button>
               </div>
               <div class="hint">
                 Arrows or WASD to drive.<br>
