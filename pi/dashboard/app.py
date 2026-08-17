@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """
 Cypher Dashboard
-Flask application that serves the monitoring UI and owns the UART
-link to the ESP32 motor controller.
-
-All movement commands go through ESP32Bridge.
+Flask application that serves the monitoring UI, owns the UART
+link to the ESP32 motor controller, and drives pan/tilt servos on the Pi.
 """
 
 import os
@@ -12,13 +10,13 @@ import sys
 import logging
 from flask import Flask, render_template, request, jsonify
 
-# Make the sibling bridge package importable when running from this directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from bridge.esp32_bridge import ESP32Bridge
 
+import servo_control
+
 
 def load_env_file(filepath=".env"):
-    """Load environment variables from a .env file (stdlib only)."""
     if not os.path.exists(filepath):
         return
     with open(filepath) as f:
@@ -37,17 +35,14 @@ load_env_file()
 
 app = Flask(__name__)
 
-# Configuration
 STREAM_URL = os.environ.get("CYPHER_STREAM_URL", "http://cypher:8080/stream")
 DASHBOARD_TITLE = os.environ.get("DASHBOARD_TITLE", "Cypher")
 SERIAL_PORT = os.environ.get("CYPHER_SERIAL_PORT", "/dev/serial0")
 SERIAL_BAUD = int(os.environ.get("CYPHER_SERIAL_BAUD", "115200"))
 
-# Logging
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger("cypher-dashboard")
 
-# Global bridge instance (started once at import / first request)
 bridge = ESP32Bridge(
     port=SERIAL_PORT,
     baudrate=SERIAL_BAUD,
@@ -56,24 +51,37 @@ bridge = ESP32Bridge(
 )
 
 _bridge_started = False
+_servos_started = False
 
 
 def ensure_bridge():
-    """Start the bridge on first use. Safe to call repeatedly."""
     global _bridge_started
     if not _bridge_started:
         ok = bridge.start()
         if ok:
             logger.info("ESP32Bridge started on %s", SERIAL_PORT)
         else:
-            logger.warning("ESP32Bridge failed to open %s — control will be offline until reconnect", SERIAL_PORT)
+            logger.warning("ESP32Bridge failed to open %s", SERIAL_PORT)
         _bridge_started = True
     return bridge.is_connected()
+
+
+def ensure_servos():
+    global _servos_started
+    if not _servos_started:
+        ok = servo_control.start()
+        if ok:
+            logger.info("Pan/tilt servos ready")
+        else:
+            logger.warning("Pan/tilt servos unavailable (install gpiozero / check wiring)")
+        _servos_started = True
+    return servo_control.is_ok()
 
 
 @app.route("/")
 def index():
     ensure_bridge()
+    ensure_servos()
     return render_template(
         "index.html",
         stream_url=STREAM_URL,
@@ -85,15 +93,19 @@ def index():
 @app.route("/api/status")
 def api_status():
     ensure_bridge()
+    ensure_servos()
+    pan, tilt = servo_control.get_angles()
     return jsonify({
         "connected": bridge.is_connected(),
         "healthy": bridge.is_healthy(),
+        "servos": servo_control.is_ok(),
+        "pan": pan,
+        "tilt": tilt,
     })
 
 
 @app.route("/api/move", methods=["POST"])
 def api_move():
-    """Send MOVE:throttle,steering to the ESP32."""
     ensure_bridge()
     data = request.get_json(silent=True) or {}
     try:
@@ -114,7 +126,6 @@ def api_move():
 
 @app.route("/api/stop", methods=["POST"])
 def api_stop():
-    """Emergency stop."""
     ensure_bridge()
     if not bridge.is_connected():
         return jsonify({"ok": False, "error": "ESP32 not connected"}), 503
@@ -122,12 +133,55 @@ def api_stop():
     return jsonify({"ok": ok})
 
 
+@app.route("/api/pan_tilt", methods=["POST"])
+def api_pan_tilt():
+    """Set or nudge pan/tilt. Body JSON:
+    {"pan": 0, "tilt": 0} absolute degrees, and/or
+    {"pan_delta": 5, "tilt_delta": -5} relative.
+    """
+    ensure_servos()
+    if not servo_control.is_ok():
+        return jsonify({"ok": False, "error": "servos unavailable"}), 503
+
+    data = request.get_json(silent=True) or {}
+    ok = True
+    if "pan_delta" in data or "tilt_delta" in data:
+        try:
+            pd = float(data.get("pan_delta", 0) or 0)
+            td = float(data.get("tilt_delta", 0) or 0)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "invalid delta"}), 400
+        ok = servo_control.nudge(pd, td)
+    if "pan" in data or "tilt" in data:
+        pan = data.get("pan", None)
+        tilt = data.get("tilt", None)
+        try:
+            pan = float(pan) if pan is not None else None
+            tilt = float(tilt) if tilt is not None else None
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "invalid angle"}), 400
+        ok = servo_control.set_angles(pan, tilt) and ok
+
+    pan, tilt = servo_control.get_angles()
+    return jsonify({"ok": ok, "pan": pan, "tilt": tilt})
+
+
+@app.route("/api/pan_tilt/center", methods=["POST"])
+def api_pan_tilt_center():
+    ensure_servos()
+    if not servo_control.is_ok():
+        return jsonify({"ok": False, "error": "servos unavailable"}), 503
+    ok = servo_control.center()
+    pan, tilt = servo_control.get_angles()
+    return jsonify({"ok": ok, "pan": pan, "tilt": tilt})
+
+
 @app.teardown_appcontext
 def shutdown_bridge(exception=None):
-    # Do not close the bridge on every request; only on process exit.
     pass
 
 
 if __name__ == "__main__":
     ensure_bridge()
+    ensure_servos()
     app.run(host="0.0.0.0", port=5000, debug=False)
