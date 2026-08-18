@@ -1,0 +1,6 @@
+{
+  "imu": false,
+  "hall_left": false,
+  "hall_right": false,
+  "laser": false
+}

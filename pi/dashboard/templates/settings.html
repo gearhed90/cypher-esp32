@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }} // Settings</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .settings-card { max-width: 480px; margin: 0 auto; }
+    .flag-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; border-bottom: 1px solid var(--border-color, #1f2937);
+    }
+    .flag-row:last-child { border-bottom: none; }
+    .flag-meta { font-size: 0.85rem; color: var(--text-muted, #6b7280); }
+    .switch {
+      position: relative; width: 48px; height: 26px; flex-shrink: 0;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; background: #374151; border-radius: 26px;
+      cursor: pointer; transition: 0.2s;
+    }
+    .slider:before {
+      content: ""; position: absolute; height: 20px; width: 20px; left: 3px; bottom: 3px;
+      background: #e5e7eb; border-radius: 50%; transition: 0.2s;
+    }
+    input:checked + .slider { background: #22d3ee; }
+    input:checked + .slider:before { transform: translateX(22px); }
+    .back-link { display: inline-block; margin-bottom: 16px; color: #22d3ee; }
+    #save-status { margin-top: 12px; font-size: 0.9rem; min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-content">
+        <div class="brand">
+          <h1 class="brand-name">CYPH<span class="accent">ER</span></h1>
+          <div class="brand-tagline">Settings</div>
+        </div>
+      </div>
+    </header>
+    <main>
+      <a class="back-link" href="/">← Dashboard</a>
+      <section class="controls-section">
+        <div class="section-title">OPTIONAL HARDWARE</div>
+        <div class="control-card settings-card">
+          <p class="flag-meta">
+            Defaults are off. Enable only after the sensor is wired.
+            Laser never turns on at boot — flag only allows control APIs.
+          </p>
+
+          <div class="flag-row">
+            <div>
+              <div>IMU</div>
+              <div class="flag-meta">Orientation / accel (I2C) — stub</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="flag-imu" {% if flags.imu %}checked{% endif %}>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="flag-row">
+            <div>
+              <div>Hall left</div>
+              <div class="flag-meta">Track sensor GPIO {{ hall_left_gpio }} — stub</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="flag-hall_left" {% if flags.hall_left %}checked{% endif %}>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="flag-row">
+            <div>
+              <div>Hall right</div>
+              <div class="flag-meta">Track sensor GPIO {{ hall_right_gpio }} — stub</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="flag-hall_right" {% if flags.hall_right %}checked{% endif %}>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="flag-row">
+            <div>
+              <div>Laser</div>
+              <div class="flag-meta">GPIO {{ laser_gpio }} — stub, off until commanded</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="flag-laser" {% if flags.laser %}checked{% endif %}>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <button type="button" class="btn-primary" id="save-flags" style="margin-top:16px;width:100%">Save</button>
+          <div id="save-status"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    document.getElementById('save-flags').addEventListener('click', async () => {
+      const body = {
+        imu: document.getElementById('flag-imu').checked,
+        hall_left: document.getElementById('flag-hall_left').checked,
+        hall_right: document.getElementById('flag-hall_right').checked,
+        laser: document.getElementById('flag-laser').checked,
+      };
+      const el = document.getElementById('save-status');
+      el.textContent = 'Saving…';
+      try {
+        const r = await fetch('/api/settings/features', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json();
+        el.textContent = data.ok ? 'Saved. Drivers stay stubs until hardware code is filled in.' : ('Error: ' + (data.error || r.status));
+      } catch (e) {
+        el.textContent = 'Network error';
+      }
+    });
+  </script>
+</body>
+</html>

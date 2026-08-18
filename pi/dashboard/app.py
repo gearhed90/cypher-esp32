@@ -3,6 +3,9 @@
 Cypher Dashboard
 Flask application that serves the monitoring UI, owns the UART
 link to the ESP32 motor controller, and drives pan/tilt servos on the Pi.
+
+Optional hardware (IMU, hall, laser) is gated by feature_flags.json —
+see /settings. Stubs no-op when disabled.
 """
 
 import os
@@ -11,9 +14,15 @@ import logging
 from flask import Flask, render_template, request, jsonify
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from bridge.esp32_bridge import ESP32Bridge
 
 import servo_control
+import features
+from sensors import imu as imu_mod
+from sensors import hall as hall_mod
+from sensors import laser as laser_mod
 
 
 def load_env_file(filepath=".env"):
@@ -78,10 +87,22 @@ def ensure_servos():
     return servo_control.is_ok()
 
 
+def ensure_optional_sensors():
+    """Start only modules whose feature flags are on (stubs until hardware)."""
+    flags = features.get_flags()
+    if flags.get("imu"):
+        imu_mod.start()
+    if flags.get("hall_left") or flags.get("hall_right"):
+        hall_mod.start()
+    if flags.get("laser"):
+        laser_mod.start()  # leaves output OFF
+
+
 @app.route("/")
 def index():
     ensure_bridge()
     ensure_servos()
+    ensure_optional_sensors()
     return render_template(
         "index.html",
         stream_url=STREAM_URL,
@@ -90,10 +111,24 @@ def index():
     )
 
 
+@app.route("/settings")
+def settings_page():
+    flags = features.get_flags()
+    return render_template(
+        "settings.html",
+        title=DASHBOARD_TITLE,
+        flags=flags,
+        hall_left_gpio=hall_mod.LEFT_GPIO,
+        hall_right_gpio=hall_mod.RIGHT_GPIO,
+        laser_gpio=laser_mod.LASER_GPIO,
+    )
+
+
 @app.route("/api/status")
 def api_status():
     ensure_bridge()
     ensure_servos()
+    ensure_optional_sensors()
     pan, tilt = servo_control.get_angles()
     return jsonify({
         "connected": bridge.is_connected(),
@@ -101,7 +136,48 @@ def api_status():
         "servos": servo_control.is_ok(),
         "pan": pan,
         "tilt": tilt,
+        "features": features.get_flags(),
+        "imu": imu_mod.read(),
+        "hall": hall_mod.read(),
+        "laser": laser_mod.status(),
     })
+
+
+@app.route("/api/settings/features", methods=["GET", "POST"])
+def api_settings_features():
+    if request.method == "GET":
+        return jsonify({"ok": True, "flags": features.get_flags()})
+    data = request.get_json(silent=True) or {}
+    flags = features.set_flags(data)
+    # Apply immediately for newly enabled stubs
+    ensure_optional_sensors()
+    if not flags.get("laser"):
+        laser_mod.set_on(False)
+    return jsonify({"ok": True, "flags": flags})
+
+
+@app.route("/api/sensors/imu")
+def api_imu():
+    ensure_optional_sensors()
+    return jsonify(imu_mod.read())
+
+
+@app.route("/api/sensors/hall")
+def api_hall():
+    ensure_optional_sensors()
+    return jsonify(hall_mod.read())
+
+
+@app.route("/api/sensors/laser", methods=["GET", "POST"])
+def api_laser():
+    ensure_optional_sensors()
+    if request.method == "GET":
+        return jsonify(laser_mod.status())
+    data = request.get_json(silent=True) or {}
+    if "on" not in data:
+        return jsonify({"ok": False, "error": "missing on"}), 400
+    ok = laser_mod.set_on(bool(data["on"]))
+    return jsonify({"ok": ok, **laser_mod.status()})
 
 
 @app.route("/api/move", methods=["POST"])
@@ -184,4 +260,5 @@ def shutdown_bridge(exception=None):
 if __name__ == "__main__":
     ensure_bridge()
     ensure_servos()
+    ensure_optional_sensors()
     app.run(host="0.0.0.0", port=5000, debug=False)
