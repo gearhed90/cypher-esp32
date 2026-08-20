@@ -1,57 +1,50 @@
 # Cypher Robot — Development Roadmap
 
-**Last Updated:** July 24, 2026
+**Last Updated:** August 20, 2026
 
 ## Core Philosophy
 
-Stable, predictable manual control first. New features are layered on top; they do not rewrite the core.
+Stable, predictable manual control first. New features layer on top; they do not rewrite the core.
 
-## Foundation Definition
+## Foundation exit criteria
 
-The robot is considered past Foundation when:
-
-- A human can reliably drive it remotely
-- It always boots to Manual + Stopped
-- Power is clean and documented
+- Human can reliably drive remotely (including a field path when home Wi‑Fi is absent)
+- Always boots Manual + Stopped
+- Power documented and good enough for daily use
 - Core docs match reality
-- Sensors and higher features can be added without touching motor control
+- Sensors/features can be added without touching motor control
 
-## Phase 1 — Foundation (Active)
+## Phase 1 — Foundation (active)
 
-**Done**
-- Clean ESP32 motor controller
-- Dashboard owns motors (buttons, keyboard, discrete speed)
+**Done (hub-level)**
+- Clean ESP32 motor controller + dashboard motor ownership
 - UART protocol + safety timeout
-- Documentation lock-in
-- Track tensioner design
-- 5 V converter choice (TOBSUN)
-- Pan/Tilt pins locked (12/13)
-- Boot policy: always Manual + Stopped
-- Electronics layout concept (center channel + camera post)
+- Pi-centric architecture; pan/tilt moved to Pi GPIOs
+- Body V3 concept; modular tracks; ramp/carriage tensioner direction
+- 5 V architecture (Drok primary; rail planned)
+- Boot policy Manual + Stopped
+- Doc lock-in process; implementation split across threads
 
-**Still open**
-- Laser pin confirmation
-- Detailed 5 V distribution (deeper discussion needed)
-- Remote-access hardening → thread “Cypher Remote Control”
-- Motor balancing / smooth open-loop feel (discussion needed)
-- Systemd enforcement of boot-to-stopped
+**Open**
+- Finish pan/tilt bring-up (hardware thread)
+- Field AP + Tailscale + PWA connection modes (remote-access thread)
+- Physical 5 V rail / tray / fusing as needed
+- Systemd hardening for boot-to-stopped
+- Hall mounts on drive side for later odometry (body/sensors)
 
-## Phase 2 — Sensors & Closed-Loop (next major design)
-- Hall sensors + AS5600
-- Pi-side straight-line assist
-- Rear ToF / ultrasonic, later lidar
-- All sensing stays on the Pi
+## Phase 2 — Sensors & closed-loop
+- A3144 hall wheel speed (6 magnets/side planned); AS5600 deferred
+- Pi-side straight-line assist after halls proven
+- Rear ToF/ultrasonic later; lidar later
+- All sensing on Pi
 
 ## Phase 3 — Mechanical completion
-- Full tracked modules
-- Final body / channel details
+- Track modules production (TPU links, pin retention)
+- Final body/channel/top cover
 
 ## Phase 4 — Future utilities
-- Groove LEDs / status lighting
-- Laser cat-play mode
-- Retractable arms
-- Vision tracking and limited autonomy
+- Groove LEDs, laser cat-play, retractable arms, vision tracking, limited autonomy
 
 ---
 
-Priority remains finishing the remaining Foundation gaps before opening the sensor thread in earnest.
+Hub prioritizes Foundation gaps owned by hardware + remote-access threads before expanding autonomy.

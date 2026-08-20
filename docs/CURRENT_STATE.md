@@ -1,52 +1,66 @@
 # Cypher — Current State
 
-**Last Updated:** July 24, 2026  
-**Phase:** Foundation
+**Last Updated:** August 20, 2026  
+**Phase:** Foundation  
+**Source:** High-level project hub (this thread) + repo reality
 
-## Working
+## Working / locked (software & architecture)
 
-- UART command protocol and 1.5 s safety timeout
-- ESP32 pure motor controller (no WiFi / web server)
-- Dashboard owns motor control (D-pad, keyboard, 10 % speed steps via number keys)
-- Track tensioner design locked
-- 5 V converter decision locked (TOBSUN EA75-5V)
-- Pan/Tilt pins locked (GPIO 12 / 13)
-- Boot policy locked: always Manual + Stopped
-- High-level electronics layout: center channel + camera post
+- UART protocol + 1.5 s safety timeout
+- ESP32 pure motor controller (no WiFi / web / OTA)
+- Dashboard owns motors (mobile sliders, desktop sticks/keyboard, discrete speed steps)
+- Pan/tilt on **Pi** (BCM 18 pan, 17 tilt); ESP32 no longer drives servos
+- Boot policy: always Manual + Stopped
+- Architecture: Pi = brain; ESP32 = motors only; GitHub = source, not live UI host
 
-## Foundation Definition (Review)
+## Working / locked (hardware — high level)
 
-Foundation means the robot is:
+- Body **V3**: central body + modular track modules
+- Track type: **segmented** (PLA proven; TPU production direction); modular end-supported axles
+- Tensioner: **carriage + adjustable bearing on ramp** (old sliding-bar/clamp design obsolete)
+- Drive: motors in body → flanged hub → spacer → sprocket hub → drive sprocket
+- 5 V: **Drok in use**; short distribution rail planned; TOBSUN = upgrade candidate only
+- Electronics in center channel; camera on pedestal; charge port + power switch on back panel
+- ESP32/Pi stack mount designed; pedestal v1 done; battery/Drok placement decided (tray TBD)
 
-1. Reliably controllable by a human over a remote link
-2. Electrically and mechanically safe on every boot (motors off, manual mode)
-3. Documented accurately
-4. Powered cleanly enough for daily use
-5. Ready for sensors and higher features to be added without rewriting the core
+## Foundation definition
 
-It does **not** require closed-loop driving, obstacle avoidance, LEDs, arms, or autonomy.
+1. Reliably controllable by a human over a remote link  
+2. Safe on every boot (motors off, manual)  
+3. Documented accurately  
+4. Powered cleanly enough for daily use  
+5. Ready for sensors/features without rewriting motor control  
 
-## Remaining Foundation Gaps
+Does **not** require closed-loop drive, obstacle avoidance, LEDs, arms, or autonomy.
 
-| Item | Status |
-|------|--------|
-| Laser pin confirmation | Provisional (GPIO 4) |
-| Detailed 5 V distribution (wiring, fusing, injection) | Needs deeper discussion |
-| Remote-access hardening | Owned by thread “Cypher Remote Control” |
-| Motor balancing / smooth open-loop feel | Needs discussion |
-| Systemd hardening to enforce boot-to-stopped | Confirmed as required; implementation pending |
-| Lid / channel mechanical details | Concept locked; detailed design later |
+## Remaining Foundation gaps (hub view)
 
-## Future (explicitly out of Foundation)
+| Item | Status | Owner |
+|------|--------|--------|
+| Pan/tilt electrical bring-up (shake / limits / pulse range) | In progress | **Hardware thread** |
+| Field + Tailscale access (AP, deck, PWA modes) | Design in progress | **Remote-access thread** |
+| Battery/Drok tray, 5 V bus board, wiring/strain relief | Open | Hardware / body |
+| Systemd enforce boot-to-stopped | Policy locked; implement pending | Pi / dashboard |
+| Laser pin | Provisional | Hardware |
+| Motor balancing / open-loop trim | **Parked until tracks on** | Hub |
+| Hall wheel-speed (A3144, 6 magnets/side, ~2 mm gap) | Planned for body; not closed-loop yet | Sensors / body |
 
-- Hall + AS5600 + closed-loop straight assist
-- Obstacle avoidance / lidar / ToF
-- Groove LEDs
-- Cat-play laser mode
-- Retractable arms
-- Full tracked modules
-- Vision tracking / autonomy
+## Explicitly out of Foundation / parked
+
+- AS5600 (dropped for now — no viable magnet mount on shaft)
+- Closed-loop straight assist (Pi-side later; needs reliable halls)
+- Obstacle ToF/lidar, groove LEDs, cat-play, retractable arms, autonomy
+
+## Thread ownership
+
+| Thread | Scope |
+|--------|--------|
+| **This hub** | High-level decisions, phase, prioritization, doc coherence |
+| Hardware | Servos, power wiring, body details, pan/tilt debug |
+| Remote access | Tailscale, Cypher-Setup AP, cyberdeck link, PWA Direct vs Tailscale |
+| Sensors | Hall/odometry, closed-loop, future perception |
+| Track | Module geometry, tensioner, TPU links |
 
 ---
 
-See [ROADMAP.md](ROADMAP.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+See [ROADMAP.md](ROADMAP.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [hardware.md](hardware.md) · [cypher-remote-access.md](cypher-remote-access.md)
