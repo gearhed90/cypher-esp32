@@ -2,14 +2,10 @@
 """
 Cypher MJPEG camera stream — picamera2 + Flask
 
-Camera Module 3 (IMX708): 1280x720, wider/usable FOV, higher JPEG quality.
-Serves multipart JPEG at http://0.0.0.0:8080/stream
-Match CYPHER_STREAM_URL (e.g. http://100.x.x.x:8080/stream).
+Camera Module 3 (IMX708): full-FOV 2304x1296 mode (less zoomed),
+streamed as MJPEG. Continuous AF when available.
 
-Run on the Pi:
-  source pi/dashboard/venv/bin/activate
-  python3 pi/vision/mjpeg_stream.py
-Or via cypher-stream.service.
+Serves http://0.0.0.0:8080/stream
 """
 
 import logging
@@ -22,11 +18,14 @@ log = logging.getLogger("cypher-stream")
 
 app = Flask(__name__)
 
-# Module 3 (IMX708) — balance of FOV, sharpness, and bandwidth
-WIDTH = 1280
-HEIGHT = 720
-FPS = 15
-QUALITY = 85
+# IMX708 full-FOV-ish video mode (2x2 binned). Avoids the tighter 720p crop.
+WIDTH = 2304
+HEIGHT = 1296
+FPS = 12
+QUALITY = 82
+# Optional downscale for bandwidth (0 = send native)
+STREAM_WIDTH = 1280
+STREAM_HEIGHT = 720
 
 _camera = None
 
@@ -38,24 +37,25 @@ def get_camera():
     from picamera2 import Picamera2
 
     cam = Picamera2()
-    # Larger main size tends to select a less-cropped mode on IMX708
     config = cam.create_video_configuration(
         main={"size": (WIDTH, HEIGHT), "format": "RGB888"},
         controls={"FrameRate": FPS},
     )
     cam.configure(config)
     cam.start()
-    time.sleep(0.4)
+    time.sleep(0.5)
 
-    # Best-effort continuous AF on Module 3 (ignore if unsupported)
     try:
         from libcamera import controls as camctrl
         cam.set_controls({"AfMode": camctrl.AfModeEnum.Continuous})
     except Exception as e:
-        log.info("AF continuous not set (%s) — fixed focus still ok", e)
+        log.info("AF continuous not set (%s)", e)
 
     _camera = cam
-    log.info("Camera started %dx%d @ %d fps (quality=%d)", WIDTH, HEIGHT, FPS, QUALITY)
+    log.info(
+        "Camera started capture %dx%d @ %d fps; stream scale %dx%d quality=%d",
+        WIDTH, HEIGHT, FPS, STREAM_WIDTH, STREAM_HEIGHT, QUALITY,
+    )
     return _camera
 
 
@@ -69,6 +69,11 @@ def mjpeg_generator():
             bgr = frame[:, :, ::-1]
         else:
             bgr = frame
+
+        if STREAM_WIDTH and STREAM_HEIGHT:
+            if bgr.shape[1] != STREAM_WIDTH or bgr.shape[0] != STREAM_HEIGHT:
+                bgr = cv2.resize(bgr, (STREAM_WIDTH, STREAM_HEIGHT), interpolation=cv2.INTER_AREA)
+
         ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), QUALITY])
         if not ok:
             time.sleep(0.05)
@@ -78,7 +83,7 @@ def mjpeg_generator():
             b"--frame\r\n"
             b"Content-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
         )
-        time.sleep(1.0 / FPS)
+        time.sleep(1.0 / max(FPS, 1))
 
 
 @app.route("/stream")
