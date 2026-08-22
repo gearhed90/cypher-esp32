@@ -2,7 +2,7 @@
 """
 Cypher MJPEG camera stream — picamera2 + Flask
 
-Camera Module 3 (IMX708): 1280x720, quality 85, continuous AF when available.
+Camera Module 3 (IMX708): 1280x720, quality 85, AWB + continuous AF.
 Serves http://0.0.0.0:8080/stream
 """
 
@@ -31,19 +31,24 @@ def get_camera():
     from picamera2 import Picamera2
 
     cam = Picamera2()
+    # XRGB8888 avoids ambiguous RGB channel ordering with some cv2 paths
     config = cam.create_video_configuration(
-        main={"size": (WIDTH, HEIGHT), "format": "RGB888"},
+        main={"size": (WIDTH, HEIGHT), "format": "XRGB8888"},
         controls={"FrameRate": FPS},
     )
     cam.configure(config)
     cam.start()
-    time.sleep(0.4)
+    time.sleep(0.5)
 
     try:
         from libcamera import controls as camctrl
-        cam.set_controls({"AfMode": camctrl.AfModeEnum.Continuous})
+        cam.set_controls({
+            "AeEnable": True,
+            "AwbEnable": True,
+            "AfMode": camctrl.AfModeEnum.Continuous,
+        })
     except Exception as e:
-        log.info("AF continuous not set (%s)", e)
+        log.info("Some controls not set (%s)", e)
 
     _camera = cam
     log.info("Camera started %dx%d @ %d fps (quality=%d)", WIDTH, HEIGHT, FPS, QUALITY)
@@ -52,14 +57,21 @@ def get_camera():
 
 def mjpeg_generator():
     import cv2
+    import numpy as np
 
     cam = get_camera()
     while True:
         frame = cam.capture_array()
-        if frame.ndim == 3 and frame.shape[2] == 3:
-            bgr = frame[:, :, ::-1]
+        # XRGB8888: (H,W,4) with bytes X,R,G,B or similar — build BGR for cv2
+        if frame.ndim == 3 and frame.shape[2] == 4:
+            # Common picamera2 XRGB layout: [:,:,1:4] is RGB
+            bgr = frame[:, :, [3, 2, 1]].copy()
+        elif frame.ndim == 3 and frame.shape[2] == 3:
+            # Assume RGB from RGB888 — convert to BGR once
+            bgr = frame[:, :, ::-1].copy()
         else:
             bgr = frame
+
         ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), QUALITY])
         if not ok:
             time.sleep(0.05)
