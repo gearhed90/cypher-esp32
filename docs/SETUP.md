@@ -1,101 +1,112 @@
 # Cypher Robot — Setup Guide
 
-**Last Updated:** July 24, 2026
-
-This guide explains how to bring up the Cypher robot from this repository.
-
-## Project Philosophy
-
-The core motor-control and manual-movement layer is kept **simple and stable**.  
-New features are built on top of this foundation. Do not modify the base movement code unless you are deliberately improving the Foundation itself.
+**Last Updated:** August 22, 2026
 
 ## Prerequisites
 
-### ESP32
-- PlatformIO (VS Code extension recommended)
-- USB-to-serial adapter (for flashing / recovery)
-- ESP32-WROVER-CAM (or compatible)
+- ESP32 (WROVER / DevKit) + PlatformIO
+- Raspberry Pi 4, Raspberry Pi OS, Python 3
+- UART wiring + 5 V rail for motors/servos
+- Camera Module 3 (IMX708) on Pi CSI
 
-### Raspberry Pi
-- Raspberry Pi 4 (or 5)
-- Raspberry Pi OS (Bookworm or newer)
-- Python 3.11+
-
-## 1. ESP32 Firmware
+## 1. ESP32 firmware
 
 ```bash
 git clone https://github.com/gearhed90/cypher-esp32.git
 cd cypher-esp32/firmware
-pio run --target upload
+# requires ESP32Servo in platformio.ini
+pio run -t upload
 ```
 
-After flashing, monitor the serial console. The ESP32 should boot, initialize UART, and wait for commands from the Pi.
+Confirm serial boot banner and **Serial2 RX=19 TX=18** in firmware.
 
-> **Note:** The current firmware still contains residual WiFi + WebServer code.  
-> Removing that residual code is a Foundation task. Until then, the web server may start, but the production control path is UART only.
+## 2. UART wiring
 
-## 2. Raspberry Pi Dashboard
+See [UART_PROTOCOL.md](UART_PROTOCOL.md).  
+Pi user must be in `dialout`. Prefer `/dev/serial0`.
+
+## 3. Dashboard
 
 ```bash
 cd cypher-esp32/pi/dashboard
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python app.py
 ```
 
-Access the dashboard at:
+`.env` example:
 
 ```
-http://<raspberry-pi-ip>:5000
+CYPHER_STREAM_URL=http://100.70.99.34:8080/stream
+CYPHER_SERIAL_PORT=/dev/serial0
 ```
 
-or via mDNS / Tailscale once configured.
-
-## 3. Systemd (Recommended)
-
-Use the provided service file so the dashboard starts on boot:
+Systemd:
 
 ```bash
 sudo cp cypher-dashboard.service /etc/systemd/system/
-sudo systemctl daemon-reload
 sudo systemctl enable --now cypher-dashboard.service
 ```
 
-## 4. UART Wiring
+## 4. Camera stream
 
-See [UART_PROTOCOL.md](UART_PROTOCOL.md) for the exact pinout (GPIO 18/19 on ESP32 ↔ pins 19/10 on Pi).
+```bash
+sudo tee /etc/systemd/system/cypher-stream.service > /dev/null << 'EOF'
+[Unit]
+Description=Cypher MJPEG camera stream
+After=network-online.target
 
-## Recommended Order After Basic Bring-up
+[Service]
+Type=simple
+User=sentry
+WorkingDirectory=/home/sentry/cypher-esp32
+ExecStart=/home/sentry/cypher-esp32/pi/dashboard/venv/bin/python /home/sentry/cypher-esp32/pi/vision/mjpeg_stream.py
+Restart=on-failure
+RestartSec=3
 
-1. Confirm dashboard can send `MOVE` / `STOP` and that the ESP32 responds.
-2. Confirm the 1.5 s safety timeout works (stop the dashboard and watch motors stop).
-3. Clean residual web-server code from the ESP32 firmware.
-4. Harden remote access (Tailscale + nginx) — see [cypher-remote-access.md](cypher-remote-access.md).
-5. Continue mechanical track work (tensioner is already locked).
-
-## Folder Structure
-
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now cypher-stream.service
 ```
-cypher-esp32/
-├── firmware/          # ESP32 motor controller
-├── pi/
-│   ├── dashboard/     # Flask control UI
-│   ├── bridge/        # UART bridge class
-│   ├── services/      # systemd units
-│   └── vision/        # future work
-└── docs/
+
+**Do not** run `sentry-tracker.service` at the same time (camera + UART conflict).
+
+```bash
+sudo systemctl disable --now sentry-tracker.service
 ```
+
+## 5. Teach boot head pose (optional)
+
+With dashboard stopped or via serial:
+
+```text
+PT:0,0
+PT_SAVE_BOOT
+```
+
+Or move with UI then send `PT_SAVE_BOOT` over UART.
+
+## 6. Verify
+
+1. `STATUS?` returns `STATUS:MANUAL,...` over UART  
+2. Motors from dashboard  
+3. Pan/tilt hold-to-repeat  
+4. `http://<pi-ip>:8080/stream` shows correct colors  
+5. Dashboard embeds stream
 
 ## Troubleshooting
 
-| Symptom | Checks |
+| Symptom | Check |
 |---------|--------|
-| ESP32 silent | Serial console at 115200, power, strapping pins |
-| Dashboard cannot open serial | Permissions on `/dev/serial0`, another process holding the port |
-| Motors never stop | Confirm heartbeat is running and timeout code is active |
-| Port 5000 conflict | Change port in `app.py` or stop the conflicting service |
+| No UART replies | `Serial2.begin(..., 19, 18)`; TX/RX not swapped; GND; stop other serial users |
+| Connected true but no motion | Bridge only tracks sends; confirm ESP32 ACKs; wiring |
+| Camera busy | Stop `sentry-tracker` / other picamera users |
+| Wrong colors | This Pi: **no** RGB/BGR swap in `mjpeg_stream.py` |
+| Disk full | `df -h`; clean apt/journal before pip/pio |
+| Port permission | `dialout` group; `chmod`/`udev` for USB flash |
 
 ---
 
-**Last updated:** July 24, 2026
+See [UART_PROTOCOL.md](UART_PROTOCOL.md) · [CURRENT_STATE.md](CURRENT_STATE.md)

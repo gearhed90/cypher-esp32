@@ -1,66 +1,56 @@
 # Cypher — Current State
 
-**Last Updated:** August 20, 2026  
-**Phase:** Foundation  
-**Source:** High-level project hub (this thread) + repo reality
+**Last Updated:** August 22, 2026  
+**Phase:** Foundation
 
-## Working / locked (software & architecture)
+## Working
 
-- UART protocol + 1.5 s safety timeout
-- ESP32 pure motor controller (no WiFi / web / OTA)
-- Dashboard owns motors (mobile sliders, desktop sticks/keyboard, discrete speed steps)
-- Pan/tilt on **Pi** (BCM 18 pan, 17 tilt); ESP32 no longer drives servos
-- Boot policy: always Manual + Stopped
-- Architecture: Pi = brain; ESP32 = motors only; GitHub = source, not live UI host
+- UART motors + pan/tilt on ESP32 (explicit Serial2 pins RX=19, TX=18)
+- Dashboard drive UI + hold-to-repeat pan/tilt via bridge
+- 1.5 s motor safety timeout; heartbeat ~800 ms
+- Servo limits ±45° pan / ±9° tilt; rate-limited motion; axis invert in firmware
+- `PT_SAVE_BOOT` / NVS boot pose; `PT_CENTER`, `PT_SLEEP`
+- Camera Module 3 stream: 1280×720, q=85, correct colors (no channel swap on this Pi)
+- Tailscale remote access to dashboard and stream
+- Track modules functional; tensioner implemented; rover driven from dashboard
 
-## Working / locked (hardware — high level)
+## Firmware
 
-- Body **V3**: central body + modular track modules
-- Track type: **segmented** (PLA proven; TPU production direction); modular end-supported axles
-- Tensioner: **carriage + adjustable bearing on ramp** (old sliding-bar/clamp design obsolete)
-- Drive: motors in body → flanged hub → spacer → sprocket hub → drive sprocket
-- 5 V: **Drok in use**; short distribution rail planned; TOBSUN = upgrade candidate only
-- Electronics in center channel; camera on pedestal; charge port + power switch on back panel
-- ESP32/Pi stack mount designed; pedestal v1 done; battery/Drok placement decided (tray TBD)
+- `firmware/src/main.cpp`: motors + ESP32Servo pan/tilt, NVS, invert flags
+- Must flash with PlatformIO + `ESP32Servo` lib; Serial2 pins required
 
-## Foundation definition
+## Dashboard / services
 
-1. Reliably controllable by a human over a remote link  
-2. Safe on every boot (motors off, manual)  
-3. Documented accurately  
-4. Powered cleanly enough for daily use  
-5. Ready for sensors/features without rewriting motor control  
+| Service | Role |
+|---------|------|
+| `cypher-dashboard.service` | UI + UART bridge |
+| `cypher-stream.service` | MJPEG on :8080 |
+| `cypher-bridge.service` | Unused (bridge in-process) |
+| `sentry-tracker.service` | **Keep stopped/disabled** while using Cypher (holds camera, sends competing servo/motor commands) |
 
-Does **not** require closed-loop drive, obstacle avoidance, LEDs, arms, or autonomy.
+Stream URL (example): `CYPHER_STREAM_URL=http://100.70.99.34:8080/stream` in `pi/dashboard/.env`.
 
-## Remaining Foundation gaps (hub view)
+## Access
 
-| Item | Status | Owner |
-|------|--------|--------|
-| Pan/tilt electrical bring-up (shake / limits / pulse range) | In progress | **Hardware thread** |
-| Field + Tailscale access (AP, deck, PWA modes) | Design in progress | **Remote-access thread** |
-| Battery/Drok tray, 5 V bus board, wiring/strain relief | Open | Hardware / body |
-| Systemd enforce boot-to-stopped | Policy locked; implement pending | Pi / dashboard |
-| Laser pin | Provisional | Hardware |
-| Motor balancing / open-loop trim | **Parked until tracks on** | Hub |
-| Hall wheel-speed (A3144, 6 magnets/side, ~2 mm gap) | Planned for body; not closed-loop yet | Sensors / body |
+- Dashboard: `http://100.70.99.34:5000` or `http://cypher:5000`
+- Stream: `http://100.70.99.34:8080/stream`
 
-## Explicitly out of Foundation / parked
+## Known gaps / next
 
-- AS5600 (dropped for now — no viable magnet mount on shaft)
-- Closed-loop straight assist (Pi-side later; needs reliable halls)
-- Obstacle ToF/lidar, groove LEDs, cat-play, retractable arms, autonomy
+1. Mechanical: tilt linkage / horn alignment for true optical center; head aim for desired FOV
+2. Optional motor wire swap if drive direction still reversed after software invert of servos only
+3. Lid + power distribution polish
+4. Disk space on Pi root was critically full during bring-up — monitor `df -h`
+5. Motor balancing parked until needed
+6. Do not enable sentry-tracker alongside Cypher stream/control without a shared camera design
 
-## Thread ownership
+## Recently closed (this thread)
 
-| Thread | Scope |
-|--------|--------|
-| **This hub** | High-level decisions, phase, prioritization, doc coherence |
-| Hardware | Servos, power wiring, body details, pan/tilt debug |
-| Remote access | Tailscale, Cypher-Setup AP, cyberdeck link, PWA Direct vs Tailscale |
-| Sensors | Hall/odometry, closed-loop, future perception |
-| Track | Module geometry, tensioner, TPU links |
+- Pan/tilt moved from Pi GPIO to ESP32 hardware PWM
+- UART pin fix; servo motion confirmed quiet under continuous hold
+- Bridge + dashboard API on UART; hold-to-repeat UI
+- Stream service + color path verified
 
 ---
 
-See [ROADMAP.md](ROADMAP.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [hardware.md](hardware.md) · [cypher-remote-access.md](cypher-remote-access.md)
+See [UART_PROTOCOL.md](UART_PROTOCOL.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [SETUP.md](SETUP.md)

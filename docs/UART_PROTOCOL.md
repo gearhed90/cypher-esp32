@@ -1,66 +1,101 @@
 # Cypher UART Communication Protocol
 
-**Last Updated:** July 24, 2026  
-**Status:** Working and stable
+**Last Updated:** August 22, 2026  
+**Status:** Motors + pan/tilt working
 
 ## Overview
 
-- **Purpose**: Reliable command channel from Raspberry Pi → ESP32 for motor control and safety.
-- **Physical Layer**: UART (Serial2 on ESP32, `/dev/serial0` on Raspberry Pi)
+- **Purpose**: Command channel from Raspberry Pi → ESP32 for **motors and pan/tilt servos**.
+- **Physical Layer**: UART (Serial2 on ESP32, `/dev/serial0` → `ttyS0` on Raspberry Pi)
 - **Baud Rate**: 115200
 - **Data Format**: 8N1
-- **Safety**: ESP32 stops motors if no command is received for 1.5 seconds.
+- **Safety**: ESP32 stops **motors** if no command for 1.5 s. Servos are **not** timed out (hold last pose).
 
 ## Wiring
 
-| ESP32          | Raspberry Pi     | Direction     | Purpose                  |
-|----------------|------------------|---------------|--------------------------|
-| GPIO 18 (TX2)  | GPIO 10 (Pin 19) | ESP32 → Pi    | Data from ESP32 to Pi    |
-| GPIO 19 (RX2)  | GPIO 8  (Pin 10) | Pi → ESP32    | Data from Pi to ESP32    |
-| GND            | Any GND          | Common        | Ground reference         |
+### UART
+
+| ESP32 | Raspberry Pi | Direction | Purpose |
+|-------|--------------|-----------|---------|
+| GPIO **18** (TX2) | GPIO 10 (pin 19) | ESP32 → Pi | Data from ESP32 |
+| GPIO **19** (RX2) | GPIO 8 (pin 10) | Pi → ESP32 | Data to ESP32 |
+| GND | GND | Common | Ground |
+
+Firmware **must** call:
+
+```cpp
+Serial2.begin(115200, SERIAL_8N1, 19, 18);  // RX=19, TX=18
+```
+
+Default `Serial2.begin(baud)` alone uses wrong pins and breaks the link.
+
+### Servo signals (ESP32)
+
+| Function | GPIO | Notes |
+|----------|------|-------|
+| Pan | **13** | |
+| Tilt | **12** | Strapping pin — avoid holding low at boot |
+| Power | 5 V rail + local caps | Not Pi 5 V pin |
 
 ## Commands (Pi → ESP32)
 
-All commands are plain text followed by a newline (`\n`).
+All commands: plain text + `\n`.
 
-| Command                  | Description                              | Example            |
-|--------------------------|------------------------------------------|--------------------|
-| `MOVE:throttle,steering` | Set motor speeds (−255…255)              | `MOVE:80,25`       |
-| `STOP`                   | Emergency stop (throttle=0, steering=0)  | `STOP`             |
-| `HEARTBEAT`              | Keep-alive (sent automatically by bridge)| `HEARTBEAT`        |
-| `STATUS?`                | Request current status                   | `STATUS?`          |
-| `MODE:MANUAL`            | Set manual control mode (future use)     | `MODE:MANUAL`      |
-| `MODE:AUTO`              | Set autonomous mode (future)             | `MODE:AUTO`        |
+### Motors
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `MOVE:throttle,steering` | Motor speeds −255…255 | `MOVE:80,25` |
+| `STOP` | throttle=0, steering=0 | `STOP` |
+| `HEARTBEAT` | Keep-alive (bridge ~800 ms) | `HEARTBEAT` |
+| `STATUS?` | Request status | `STATUS?` |
+| `MODE:MANUAL` / `MODE:AUTO` | Future | |
+
+### Pan / tilt
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `PT:pan,tilt` | Set both (degrees, clamped) | `PT:20,5` |
+| `PAN:angle` | Pan only | `PAN:-15` |
+| `TILT:angle` | Tilt only | `TILT:-5` |
+| `PT_CENTER` | (0, 0) | `PT_CENTER` |
+| `PT_SLEEP` | Sleep pose (0, −9) | `PT_SLEEP` |
+| `PT_SAVE_BOOT` | Save current pose to NVS | `PT_SAVE_BOOT` |
+| `PT_BOOT` | Go to saved boot pose | `PT_BOOT` |
+
+**Software limits:** pan **±45°**, tilt **±9°** (mechanical).  
+**Motion:** rate-limited ~28°/s.  
+**Invert:** both axes inverted in firmware (`INVERT_PAN` / `INVERT_TILT`) so dashboard directions match the robot.  
+**Boot:** loads pose from NVS if saved; else (0, 0).
 
 ## Responses (ESP32 → Pi)
 
-| Response                          | Description                          |
-|-----------------------------------|--------------------------------------|
-| `ACK:MOVE`                        | MOVE command accepted                |
-| `ACK:STOP`                        | STOP executed                        |
-| `HEARTBEAT`                       | Heartbeat acknowledgment (optional)  |
-| `STATUS:MANUAL,throttle,steering` | Current mode and motor values        |
-| `ERR:UNKNOWN_CMD`                 | Unrecognized command                 |
+| Response | Meaning |
+|----------|---------|
+| `ACK:MOVE` / `ACK:STOP` | Motor command accepted |
+| `ACK:PT` / `ACK:PAN` / `ACK:TILT` | Servo command accepted |
+| `ACK:PT_CENTER` / `ACK:PT_SLEEP` / `ACK:PT_SAVE_BOOT` / `ACK:PT_BOOT` | Pose helpers |
+| `HEARTBEAT` | Optional echo |
+| `STATUS:MANUAL,thr,str,pan,tilt` | Mode + motors + head angles |
+| `ERR:UNKNOWN_CMD` | Bad command |
 
-## Heartbeat & Safety Timeout
+## Heartbeat & motor timeout
 
-- The Python bridge (`esp32_bridge.py`) sends `HEARTBEAT` every **~800 ms**.
-- This keeps the ESP32’s 1.5-second safety timeout from firing during normal idle periods.
-- If the bridge or Pi stops, the ESP32 will stop the motors after 1.5 s of silence.
+- Bridge sends `HEARTBEAT` ~every 800 ms.
+- 1.5 s silence → motors stop.
+- Servos keep position across motor timeout.
 
-## Implementation Notes
+## Implementation notes
 
-- **ESP32**: Uses `Serial2` on GPIO 18/19. Commands parsed in `processCommand()`.
-- **Raspberry Pi**: `ESP32Bridge` class in `pi/bridge/esp32_bridge.py`. Currently run inside the dashboard process (the separate `cypher-bridge.service` is stopped).
+- **ESP32:** `firmware/src/main.cpp` — motors + ESP32Servo, NVS boot pose.
+- **Pi bridge:** `pi/bridge/esp32_bridge.py` — `move`, `stop`, `pt`, `pan`, `tilt`, `pt_center`, `pt_sleep`, `pt_save_boot`, `pt_boot`.
+- **Dashboard:** `/api/pan_tilt` and center use the bridge (not Pi GPIO).
 - Commands are case-sensitive.
-- The bridge uses a background thread for the heartbeat so it never blocks control commands.
 
-## Future Extensions (After Foundation)
+## Conflicts
 
-- Expand `STATUS?` with battery, IMU, or other telemetry
-- Optional checksums if the environment becomes noisy
-- Clean mode switching once autonomy is re-introduced carefully
+Do **not** run `sentry-tracker.service` while using the Cypher dashboard — it opens the same UART path and drives servos/motors independently.
 
 ---
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the larger system context.
+See [ARCHITECTURE.md](ARCHITECTURE.md) · [CURRENT_STATE.md](CURRENT_STATE.md)
