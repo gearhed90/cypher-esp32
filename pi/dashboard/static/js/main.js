@@ -12,9 +12,13 @@ const state = {
   trim: 0,
   moving: false,
   sendTimer: null,
+  ptRepeatTimer: null,
+  ptRepeatKind: null,
+  ptRepeatDelta: 0,
 };
 
 const DEADBAND = 8;
+const PT_REPEAT_MS = 120;
 
 function percentToPwm(pct) {
   return Math.round((pct / 100) * 255);
@@ -149,20 +153,63 @@ async function centerPanTilt() {
   }
 }
 
+function stopPtRepeat() {
+  if (state.ptRepeatTimer) {
+    clearInterval(state.ptRepeatTimer);
+    state.ptRepeatTimer = null;
+  }
+  state.ptRepeatKind = null;
+  state.ptRepeatDelta = 0;
+}
+
+function startPtRepeat(kind, delta) {
+  stopPtRepeat();
+  state.ptRepeatKind = kind;
+  state.ptRepeatDelta = delta;
+  const fire = () => {
+    if (kind === "pan") sendPanTilt({ pan_delta: delta });
+    else if (kind === "tilt") sendPanTilt({ tilt_delta: delta });
+  };
+  fire(); // immediate first step
+  state.ptRepeatTimer = setInterval(fire, PT_REPEAT_MS);
+}
+
 function bindPanTilt() {
   document.querySelectorAll("[data-pt]").forEach((btn) => {
+    btn.style.userSelect = "none";
+    btn.style.webkitUserSelect = "none";
+    btn.style.touchAction = "none";
+
     const kind = btn.dataset.pt;
+
     const onDown = (e) => {
       e.preventDefault();
+      e.stopPropagation();
       if (kind === "center") {
         centerPanTilt();
         return;
       }
       const delta = parseFloat(btn.dataset.delta || "0");
-      if (kind === "pan") sendPanTilt({ pan_delta: delta });
-      if (kind === "tilt") sendPanTilt({ tilt_delta: delta });
+      if (kind === "pan" || kind === "tilt") {
+        startPtRepeat(kind, delta);
+      }
     };
+
+    const onUp = (e) => {
+      e.preventDefault();
+      stopPtRepeat();
+    };
+
     btn.addEventListener("pointerdown", onDown);
+    btn.addEventListener("pointerup", onUp);
+    btn.addEventListener("pointerleave", onUp);
+    btn.addEventListener("pointercancel", onUp);
+    btn.addEventListener("contextmenu", (e) => e.preventDefault());
+  });
+
+  window.addEventListener("blur", stopPtRepeat);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopPtRepeat();
   });
 }
 
@@ -390,7 +437,13 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(pollStatus, 2000);
 
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) sendStop();
+    if (document.hidden) {
+      sendStop();
+      stopPtRepeat();
+    }
   });
-  window.addEventListener("blur", () => sendStop());
+  window.addEventListener("blur", () => {
+    sendStop();
+    stopPtRepeat();
+  });
 });
