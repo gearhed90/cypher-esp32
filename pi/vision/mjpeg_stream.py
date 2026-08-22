@@ -80,7 +80,7 @@ def stream():
     )
 
 
-@app.route("/"):
+@app.route("/")
 def index():
     return (
         "<html><body style='background:#111;color:#8cf;font-family:sans-serif'>"
