@@ -31,14 +31,13 @@ def get_camera():
     from picamera2 import Picamera2
 
     cam = Picamera2()
-    # XRGB8888 avoids ambiguous RGB channel ordering with some cv2 paths
     config = cam.create_video_configuration(
-        main={"size": (WIDTH, HEIGHT), "format": "XRGB8888"},
+        main={"size": (WIDTH, HEIGHT), "format": "RGB888"},
         controls={"FrameRate": FPS},
     )
     cam.configure(config)
     cam.start()
-    time.sleep(0.5)
+    time.sleep(0.6)
 
     try:
         from libcamera import controls as camctrl
@@ -57,18 +56,13 @@ def get_camera():
 
 def mjpeg_generator():
     import cv2
-    import numpy as np
 
     cam = get_camera()
     while True:
         frame = cam.capture_array()
-        # XRGB8888: (H,W,4) with bytes X,R,G,B or similar — build BGR for cv2
-        if frame.ndim == 3 and frame.shape[2] == 4:
-            # Common picamera2 XRGB layout: [:,:,1:4] is RGB
-            bgr = frame[:, :, [3, 2, 1]].copy()
-        elif frame.ndim == 3 and frame.shape[2] == 3:
-            # Assume RGB from RGB888 — convert to BGR once
-            bgr = frame[:, :, ::-1].copy()
+        # picamera2 RGB888 is RGB; OpenCV encode expects BGR
+        if frame.ndim == 3 and frame.shape[2] >= 3:
+            bgr = cv2.cvtColor(frame[:, :, :3], cv2.COLOR_RGB2BGR)
         else:
             bgr = frame
 
