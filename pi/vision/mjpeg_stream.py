@@ -2,9 +2,7 @@
 """
 Cypher MJPEG camera stream — picamera2 + Flask
 
-Camera Module 3 (IMX708): full-FOV 2304x1296 mode (less zoomed),
-streamed as MJPEG. Continuous AF when available.
-
+Camera Module 3 (IMX708): 1280x720, quality 85, continuous AF when available.
 Serves http://0.0.0.0:8080/stream
 """
 
@@ -18,14 +16,10 @@ log = logging.getLogger("cypher-stream")
 
 app = Flask(__name__)
 
-# IMX708 full-FOV-ish video mode (2x2 binned). Avoids the tighter 720p crop.
-WIDTH = 2304
-HEIGHT = 1296
-FPS = 12
-QUALITY = 82
-# Optional downscale for bandwidth (0 = send native)
-STREAM_WIDTH = 1280
-STREAM_HEIGHT = 720
+WIDTH = 1280
+HEIGHT = 720
+FPS = 15
+QUALITY = 85
 
 _camera = None
 
@@ -43,7 +37,7 @@ def get_camera():
     )
     cam.configure(config)
     cam.start()
-    time.sleep(0.5)
+    time.sleep(0.4)
 
     try:
         from libcamera import controls as camctrl
@@ -52,10 +46,7 @@ def get_camera():
         log.info("AF continuous not set (%s)", e)
 
     _camera = cam
-    log.info(
-        "Camera started capture %dx%d @ %d fps; stream scale %dx%d quality=%d",
-        WIDTH, HEIGHT, FPS, STREAM_WIDTH, STREAM_HEIGHT, QUALITY,
-    )
+    log.info("Camera started %dx%d @ %d fps (quality=%d)", WIDTH, HEIGHT, FPS, QUALITY)
     return _camera
 
 
@@ -69,11 +60,6 @@ def mjpeg_generator():
             bgr = frame[:, :, ::-1]
         else:
             bgr = frame
-
-        if STREAM_WIDTH and STREAM_HEIGHT:
-            if bgr.shape[1] != STREAM_WIDTH or bgr.shape[0] != STREAM_HEIGHT:
-                bgr = cv2.resize(bgr, (STREAM_WIDTH, STREAM_HEIGHT), interpolation=cv2.INTER_AREA)
-
         ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), QUALITY])
         if not ok:
             time.sleep(0.05)
@@ -83,7 +69,7 @@ def mjpeg_generator():
             b"--frame\r\n"
             b"Content-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
         )
-        time.sleep(1.0 / max(FPS, 1))
+        time.sleep(1.0 / FPS)
 
 
 @app.route("/stream")
@@ -94,7 +80,7 @@ def stream():
     )
 
 
-@app.route("/")
+@app.route("/"):
 def index():
     return (
         "<html><body style='background:#111;color:#8cf;font-family:sans-serif'>"
