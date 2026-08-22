@@ -3,6 +3,7 @@
 ESP32 Bridge - Robust communication layer between Raspberry Pi and ESP32.
 
 Focus: Reliability, auto-recovery, and clean interface.
+Motors + pan/tilt servos over UART.
 """
 
 import serial
@@ -21,6 +22,7 @@ class ESP32Bridge:
     - Background heartbeat with health monitoring
     - Clean start/stop interface
     - Safe motor stop on connection loss
+    - Pan/tilt commands (ESP32 hardware PWM)
     """
 
     def __init__(
@@ -46,7 +48,6 @@ class ESP32Bridge:
         self._heartbeat_thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
 
-        # Setup logging
         self.logger = logging.getLogger("ESP32Bridge")
         self.logger.setLevel(log_level)
         if not self.logger.handlers:
@@ -64,7 +65,7 @@ class ESP32Bridge:
                 baudrate=self.baudrate,
                 timeout=self.timeout
             )
-            time.sleep(0.4)  # Give ESP32 time to boot if needed
+            time.sleep(0.4)
             self.connected = True
             self.last_heartbeat = time.time()
 
@@ -83,7 +84,6 @@ class ESP32Bridge:
             return False
 
     def _heartbeat_loop(self):
-        """Send periodic heartbeats and monitor connection health."""
         while not self._stop_event.is_set():
             try:
                 if self.connected and self.ser and self.ser.is_open:
@@ -96,7 +96,6 @@ class ESP32Bridge:
             time.sleep(self.heartbeat_interval)
 
     def _attempt_reconnect(self):
-        """Try to recover the serial connection."""
         self.logger.warning("Attempting to reconnect to ESP32...")
         self.connected = False
 
@@ -116,15 +115,12 @@ class ESP32Bridge:
             self.logger.error(f"Reconnect failed: {e}")
 
     def is_connected(self) -> bool:
-        """Returns True if we recently received/sent a heartbeat."""
         return (time.time() - self.last_heartbeat) < self.heartbeat_timeout
 
     def is_healthy(self) -> bool:
-        """Stronger health check (currently same as is_connected)."""
         return self.is_connected()
 
     def close(self):
-        """Cleanly shut down the bridge."""
         self.logger.info("Shutting down ESP32 bridge...")
         self._stop_event.set()
 
@@ -133,7 +129,7 @@ class ESP32Bridge:
 
         if self.ser and self.ser.is_open:
             try:
-                self._send_raw("STOP")  # Best effort stop
+                self._send_raw("STOP")
             except Exception:
                 pass
             self.ser.close()
@@ -151,7 +147,6 @@ class ESP32Bridge:
     # ====================== Command Interface ======================
 
     def _send_raw(self, message: str):
-        """Internal method to send a raw command."""
         if not self.ser or not self.ser.is_open:
             raise ConnectionError("Serial port is not open")
 
@@ -160,7 +155,6 @@ class ESP32Bridge:
             self.ser.flush()
 
     def move(self, throttle: int, steering: int) -> bool:
-        """Send movement command to ESP32."""
         if not self.connected:
             return False
         try:
@@ -173,7 +167,6 @@ class ESP32Bridge:
             return False
 
     def stop(self) -> bool:
-        """Send emergency stop command."""
         try:
             self._send_raw("STOP")
             return True
@@ -182,7 +175,6 @@ class ESP32Bridge:
             return False
 
     def get_status(self) -> Optional[str]:
-        """Request current status from ESP32."""
         if not self.connected:
             return None
         try:
@@ -195,7 +187,6 @@ class ESP32Bridge:
         return None
 
     def set_mode(self, mode: str) -> bool:
-        """Set control mode (MANUAL or AUTO)."""
         if not self.connected:
             return False
         try:
@@ -203,4 +194,57 @@ class ESP32Bridge:
             return True
         except Exception as e:
             self.logger.warning(f"Failed to set mode: {e}")
+            return False
+
+    # ====================== Pan / Tilt (ESP32 hardware PWM) ======================
+
+    def pt(self, pan: float, tilt: float) -> bool:
+        """Set pan and tilt angles in degrees."""
+        if not self.connected:
+            return False
+        try:
+            self._send_raw(f"PT:{pan},{tilt}")
+            return True
+        except Exception as e:
+            self.logger.warning(f"Failed to send PT: {e}")
+            return False
+
+    def pan(self, angle: float) -> bool:
+        if not self.connected:
+            return False
+        try:
+            self._send_raw(f"PAN:{angle}")
+            return True
+        except Exception as e:
+            self.logger.warning(f"Failed to send PAN: {e}")
+            return False
+
+    def tilt(self, angle: float) -> bool:
+        if not self.connected:
+            return False
+        try:
+            self._send_raw(f"TILT:{angle}")
+            return True
+        except Exception as e:
+            self.logger.warning(f"Failed to send TILT: {e}")
+            return False
+
+    def pt_center(self) -> bool:
+        if not self.connected:
+            return False
+        try:
+            self._send_raw("PT_CENTER")
+            return True
+        except Exception as e:
+            self.logger.warning(f"Failed to send PT_CENTER: {e}")
+            return False
+
+    def pt_sleep(self) -> bool:
+        if not self.connected:
+            return False
+        try:
+            self._send_raw("PT_SLEEP")
+            return True
+        except Exception as e:
+            self.logger.warning(f"Failed to send PT_SLEEP: {e}")
             return False

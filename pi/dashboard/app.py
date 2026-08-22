@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Cypher Dashboard
-Flask application that serves the monitoring UI, owns the UART
-link to the ESP32 motor controller, and drives pan/tilt servos on the Pi.
+Flask application that serves the monitoring UI and owns the UART
+link to the ESP32 (motors + pan/tilt).
 
 Optional hardware (IMU, hall, laser) is gated by feature_flags.json —
 see /settings. Stubs no-op when disabled.
@@ -18,7 +18,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from bridge.esp32_bridge import ESP32Bridge
 
-import servo_control
 import features
 from sensors import imu as imu_mod
 from sensors import hall as hall_mod
@@ -60,7 +59,8 @@ bridge = ESP32Bridge(
 )
 
 _bridge_started = False
-_servos_started = False
+_pan_angle = 0.0
+_tilt_angle = 0.0
 
 
 def ensure_bridge():
@@ -73,18 +73,6 @@ def ensure_bridge():
             logger.warning("ESP32Bridge failed to open %s", SERIAL_PORT)
         _bridge_started = True
     return bridge.is_connected()
-
-
-def ensure_servos():
-    global _servos_started
-    if not _servos_started:
-        ok = servo_control.start()
-        if ok:
-            logger.info("Pan/tilt servos ready")
-        else:
-            logger.warning("Pan/tilt servos unavailable (install gpiozero / check wiring)")
-        _servos_started = True
-    return servo_control.is_ok()
 
 
 def ensure_optional_sensors():
@@ -101,7 +89,6 @@ def ensure_optional_sensors():
 @app.route("/")
 def index():
     ensure_bridge()
-    ensure_servos()
     ensure_optional_sensors()
     return render_template(
         "index.html",
@@ -127,15 +114,13 @@ def settings_page():
 @app.route("/api/status")
 def api_status():
     ensure_bridge()
-    ensure_servos()
     ensure_optional_sensors()
-    pan, tilt = servo_control.get_angles()
     return jsonify({
         "connected": bridge.is_connected(),
         "healthy": bridge.is_healthy(),
-        "servos": servo_control.is_ok(),
-        "pan": pan,
-        "tilt": tilt,
+        "servos": bridge.is_connected(),  # pan/tilt live on ESP32
+        "pan": _pan_angle,
+        "tilt": _tilt_angle,
         "features": features.get_flags(),
         "imu": imu_mod.read(),
         "hall": hall_mod.read(),
@@ -149,7 +134,6 @@ def api_settings_features():
         return jsonify({"ok": True, "flags": features.get_flags()})
     data = request.get_json(silent=True) or {}
     flags = features.set_flags(data)
-    # Apply immediately for newly enabled stubs
     ensure_optional_sensors()
     if not flags.get("laser"):
         laser_mod.set_on(False)
@@ -211,45 +195,51 @@ def api_stop():
 
 @app.route("/api/pan_tilt", methods=["POST"])
 def api_pan_tilt():
-    """Set or nudge pan/tilt. Body JSON:
-    {"pan": 0, "tilt": 0} absolute degrees, and/or
-    {"pan_delta": 5, "tilt_delta": -5} relative.
+    """Set or nudge pan/tilt via ESP32 UART.
+    Body JSON: {"pan": 0, "tilt": 0} and/or {"pan_delta": 5, "tilt_delta": -5}
     """
-    ensure_servos()
-    if not servo_control.is_ok():
-        return jsonify({"ok": False, "error": "servos unavailable"}), 503
+    global _pan_angle, _tilt_angle
+    ensure_bridge()
+    if not bridge.is_connected():
+        return jsonify({"ok": False, "error": "ESP32 not connected"}), 503
 
     data = request.get_json(silent=True) or {}
     ok = True
+
     if "pan_delta" in data or "tilt_delta" in data:
         try:
             pd = float(data.get("pan_delta", 0) or 0)
             td = float(data.get("tilt_delta", 0) or 0)
         except (TypeError, ValueError):
             return jsonify({"ok": False, "error": "invalid delta"}), 400
-        ok = servo_control.nudge(pd, td)
+        _pan_angle = max(-45.0, min(45.0, _pan_angle + pd))
+        _tilt_angle = max(-9.0, min(9.0, _tilt_angle + td))
+        ok = bridge.pt(_pan_angle, _tilt_angle) and ok
+
     if "pan" in data or "tilt" in data:
-        pan = data.get("pan", None)
-        tilt = data.get("tilt", None)
         try:
-            pan = float(pan) if pan is not None else None
-            tilt = float(tilt) if tilt is not None else None
+            if "pan" in data and data["pan"] is not None:
+                _pan_angle = max(-45.0, min(45.0, float(data["pan"])))
+            if "tilt" in data and data["tilt"] is not None:
+                _tilt_angle = max(-9.0, min(9.0, float(data["tilt"])))
         except (TypeError, ValueError):
             return jsonify({"ok": False, "error": "invalid angle"}), 400
-        ok = servo_control.set_angles(pan, tilt) and ok
+        ok = bridge.pt(_pan_angle, _tilt_angle) and ok
 
-    pan, tilt = servo_control.get_angles()
-    return jsonify({"ok": ok, "pan": pan, "tilt": tilt})
+    return jsonify({"ok": ok, "pan": _pan_angle, "tilt": _tilt_angle})
 
 
 @app.route("/api/pan_tilt/center", methods=["POST"])
 def api_pan_tilt_center():
-    ensure_servos()
-    if not servo_control.is_ok():
-        return jsonify({"ok": False, "error": "servos unavailable"}), 503
-    ok = servo_control.center()
-    pan, tilt = servo_control.get_angles()
-    return jsonify({"ok": ok, "pan": pan, "tilt": tilt})
+    global _pan_angle, _tilt_angle
+    ensure_bridge()
+    if not bridge.is_connected():
+        return jsonify({"ok": False, "error": "ESP32 not connected"}), 503
+    ok = bridge.pt_center()
+    if ok:
+        _pan_angle = 0.0
+        _tilt_angle = 0.0
+    return jsonify({"ok": ok, "pan": _pan_angle, "tilt": _tilt_angle})
 
 
 @app.teardown_appcontext
@@ -259,6 +249,5 @@ def shutdown_bridge(exception=None):
 
 if __name__ == "__main__":
     ensure_bridge()
-    ensure_servos()
     ensure_optional_sensors()
     app.run(host="0.0.0.0", port=5000, debug=False)
