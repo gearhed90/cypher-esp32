@@ -55,10 +55,7 @@ class ESP32Bridge:
             handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
             self.logger.addHandler(handler)
 
-    # ====================== Connection Management ======================
-
     def start(self) -> bool:
-        """Open serial connection and start heartbeat thread."""
         try:
             self.ser = serial.Serial(
                 port=self.port,
@@ -141,10 +138,8 @@ class ESP32Bridge:
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exp_type, exp_val, exp_tb):
         self.close()
-
-    # ====================== Command Interface ======================
 
     def _send_raw(self, message: str):
         if not self.ser or not self.ser.is_open:
@@ -158,8 +153,7 @@ class ESP32Bridge:
         if not self.connected:
             return False
         try:
-            cmd = f"MOVE:{throttle},{steering}"
-            self._send_raw(cmd)
+            self._send_raw(f"MOVE:{throttle},{steering}")
             return True
         except Exception as e:
             self.logger.warning(f"Failed to send MOVE command: {e}")
@@ -196,10 +190,7 @@ class ESP32Bridge:
             self.logger.warning(f"Failed to set mode: {e}")
             return False
 
-    # ====================== Pan / Tilt (ESP32 hardware PWM) ======================
-
     def pt(self, pan: float, tilt: float) -> bool:
-        """Set pan and tilt angles in degrees."""
         if not self.connected:
             return False
         try:
@@ -247,4 +238,25 @@ class ESP32Bridge:
             return True
         except Exception as e:
             self.logger.warning(f"Failed to send PT_SLEEP: {e}")
+            return False
+
+    def pt_save_boot(self) -> bool:
+        """Save current head pose as boot pose (NVS on ESP32)."""
+        if not self.connected:
+            return False
+        try:
+            self._send_raw("PT_SAVE_BOOT")
+            return True
+        except Exception as e:
+            self.logger.warning(f"Failed to send PT_SAVE_BOOT: {e}")
+            return False
+
+    def pt_boot(self) -> bool:
+        if not self.connected:
+            return False
+        try:
+            self._send_raw("PT_BOOT")
+            return True
+        except Exception as e:
+            self.logger.warning(f"Failed to send PT_BOOT: {e}")
             return False
