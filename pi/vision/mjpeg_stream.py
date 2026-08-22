@@ -3,6 +3,7 @@
 Cypher MJPEG camera stream — picamera2 + Flask
 
 Camera Module 3 (IMX708): 1280x720, quality 85, AWB + continuous AF.
+On this Pi the capture buffer order already matches cv2 JPEG encode.
 Serves http://0.0.0.0:8080/stream
 """
 
@@ -60,13 +61,12 @@ def mjpeg_generator():
     cam = get_camera()
     while True:
         frame = cam.capture_array()
-        # picamera2 RGB888 is RGB; OpenCV encode expects BGR
-        if frame.ndim == 3 and frame.shape[2] >= 3:
-            bgr = cv2.cvtColor(frame[:, :, :3], cv2.COLOR_RGB2BGR)
-        else:
-            bgr = frame
+        # Do not channel-swap: on this platform RGB888 capture already
+        # encodes with correct colors via cv2.imencode (verified empirically).
+        if frame.ndim == 3 and frame.shape[2] > 3:
+            frame = frame[:, :, :3]
 
-        ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), QUALITY])
+        ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), QUALITY])
         if not ok:
             time.sleep(0.05)
             continue
