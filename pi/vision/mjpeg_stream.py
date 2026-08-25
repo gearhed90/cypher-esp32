@@ -2,7 +2,8 @@
 """
 Cypher MJPEG camera stream — picamera2 + Flask
 
-Camera Module 3 (IMX708): 1280x720, quality 85, AWB + continuous AF.
+Remote-friendly defaults: 640x480, quality 55, 10 fps.
+(Was 1280x720 q=85 @ 15 — too heavy off-site over Tailscale.)
 On this Pi the capture buffer order already matches cv2 JPEG encode.
 Serves http://0.0.0.0:8080/stream
 """
@@ -17,10 +18,10 @@ log = logging.getLogger("cypher-stream")
 
 app = Flask(__name__)
 
-WIDTH = 1280
-HEIGHT = 720
-FPS = 15
-QUALITY = 85
+WIDTH = 640
+HEIGHT = 480
+FPS = 10
+QUALITY = 55
 
 _camera = None
 
