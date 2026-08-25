@@ -12,6 +12,9 @@ const state = {
   trim: 0,
   moving: false,
   sendTimer: null,
+  holdTimer: null,
+  lastThr: 0,
+  lastStr: 0,
   ptRepeatTimer: null,
   ptRepeatKind: null,
   ptRepeatDelta: 0,
@@ -19,6 +22,7 @@ const state = {
 
 const DEADBAND = 8;
 const PT_REPEAT_MS = 120;
+const MOVE_HOLD_MS = 400;
 
 function percentToPwm(pct) {
   return Math.round((pct / 100) * 255);
@@ -95,7 +99,30 @@ function updateMobileReadout() {
   el.textContent = `T ${state.throttle} · S ${st} · trim ${state.trim}`;
 }
 
-async function sendMove(throttle, steering) {
+function stopHoldRepeat() {
+  if (state.holdTimer) {
+    clearInterval(state.holdTimer);
+    state.holdTimer = null;
+  }
+}
+
+function startHoldRepeat(throttle, steering) {
+  state.lastThr = throttle;
+  state.lastStr = steering;
+  if (state.holdTimer) return;
+  state.holdTimer = setInterval(() => {
+    if (!state.moving && !state.activeDir) {
+      stopHoldRepeat();
+      return;
+    }
+    sendMove(state.lastThr, state.lastStr, true);
+  }, MOVE_HOLD_MS);
+}
+
+async function sendMove(throttle, steering, fromHold) {
+  state.lastThr = throttle;
+  state.lastStr = steering;
+  if (!fromHold) startHoldRepeat(throttle, steering);
   try {
     const r = await fetch("/api/move", {
       method: "POST",
@@ -114,6 +141,7 @@ async function sendMove(throttle, steering) {
 }
 
 async function sendStop() {
+  stopHoldRepeat();
   state.activeDir = null;
   state.moving = false;
   state.throttle = 0;
@@ -218,14 +246,14 @@ function dirToCommand(dir) {
 }
 
 function startDir(dir) {
-  if (state.activeDir === dir) return;
   state.activeDir = dir;
   const cmd = dirToCommand(dir);
+  state.moving = true;
   sendMove(cmd.throttle, cmd.steering);
 }
 
 function stopDir() {
-  if (state.activeDir === null) return;
+  if (state.activeDir === null && !state.moving) return;
   sendStop();
 }
 
@@ -318,10 +346,7 @@ function pushMobileCommand() {
   const rawSteer = applyDeadband(state.steering);
   updateMobileReadout();
   if (thr === 0 && rawSteer === 0) {
-    if (state.moving) {
-      state.moving = false;
-      fetch("/api/stop", { method: "POST" }).catch(() => {});
-    }
+    if (state.moving || state.holdTimer) sendStop();
     return;
   }
   state.moving = true;
@@ -352,8 +377,6 @@ function springAxis(axis) {
 
 function bindSpringReturn(el, axis) {
   if (!el) return;
-  // One release path only. pointerup+touchend+mouseup+change was firing
-  // several STOPs per gesture and fighting MOVE.
   el.addEventListener("pointerup", (e) => {
     e.preventDefault();
     springAxis(axis);
@@ -426,8 +449,6 @@ document.addEventListener("DOMContentLoaded", () => {
   pollStatus();
   setInterval(pollStatus, 2000);
 
-  // Only stop when the page is actually backgrounded.
-  // window.blur fires on iOS during sliders/stream and was killing drive.
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       sendStop();
