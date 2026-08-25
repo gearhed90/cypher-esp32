@@ -130,7 +130,6 @@ async function sendStop() {
   }
 }
 
-/* Pan / tilt */
 async function sendPanTilt(body) {
   try {
     const r = await fetch("/api/pan_tilt", {
@@ -170,7 +169,7 @@ function startPtRepeat(kind, delta) {
     if (kind === "pan") sendPanTilt({ pan_delta: delta });
     else if (kind === "tilt") sendPanTilt({ tilt_delta: delta });
   };
-  fire(); // immediate first step
+  fire();
   state.ptRepeatTimer = setInterval(fire, PT_REPEAT_MS);
 }
 
@@ -202,14 +201,8 @@ function bindPanTilt() {
 
     btn.addEventListener("pointerdown", onDown);
     btn.addEventListener("pointerup", onUp);
-    btn.addEventListener("pointerleave", onUp);
     btn.addEventListener("pointercancel", onUp);
     btn.addEventListener("contextmenu", (e) => e.preventDefault());
-  });
-
-  window.addEventListener("blur", stopPtRepeat);
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) stopPtRepeat();
   });
 }
 
@@ -254,7 +247,6 @@ function bindDpad() {
     };
     btn.addEventListener("pointerdown", onDown);
     btn.addEventListener("pointerup", onUp);
-    btn.addEventListener("pointerleave", onUp);
     btn.addEventListener("pointercancel", onUp);
   });
 }
@@ -360,17 +352,15 @@ function springAxis(axis) {
 
 function bindSpringReturn(el, axis) {
   if (!el) return;
-  const onRelease = (e) => {
+  // One release path only. pointerup+touchend+mouseup+change was firing
+  // several STOPs per gesture and fighting MOVE.
+  el.addEventListener("pointerup", (e) => {
     e.preventDefault();
     springAxis(axis);
-  };
-  el.addEventListener("pointerup", onRelease);
-  el.addEventListener("pointercancel", onRelease);
-  el.addEventListener("touchend", onRelease, { passive: false });
-  el.addEventListener("mouseup", onRelease);
-  el.addEventListener("change", () => {
-    if (axis === "throttle" && parseInt(el.value, 10) !== 0) springAxis("throttle");
-    if (axis === "steer" && parseInt(el.value, 10) !== 0) springAxis("steer");
+  });
+  el.addEventListener("pointercancel", (e) => {
+    e.preventDefault();
+    springAxis(axis);
   });
 }
 
@@ -436,14 +426,12 @@ document.addEventListener("DOMContentLoaded", () => {
   pollStatus();
   setInterval(pollStatus, 2000);
 
+  // Only stop when the page is actually backgrounded.
+  // window.blur fires on iOS during sliders/stream and was killing drive.
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       sendStop();
       stopPtRepeat();
     }
-  });
-  window.addEventListener("blur", () => {
-    sendStop();
-    stopPtRepeat();
   });
 });
