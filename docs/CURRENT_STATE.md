@@ -1,6 +1,6 @@
 # Cypher — Current State
 
-**Last Updated:** August 22, 2026  
+**Last Updated:** August 31, 2026  
 **Phase:** Foundation
 
 ## Working
@@ -8,8 +8,9 @@
 - UART motors + pan/tilt on ESP32 (explicit Serial2 pins RX=19, TX=18)
 - Dashboard drive UI + hold-to-repeat pan/tilt via bridge
 - 1.5 s motor safety timeout; heartbeat ~800 ms
-- Servo limits ±45° pan / ±9° tilt; rate-limited motion; axis invert in firmware
-- `PT_SAVE_BOOT` / NVS boot pose; `PT_CENTER`, `PT_SLEEP`
+- Servo limits ±45° pan / tilt **down −12°, up +25°**; rate-limited motion; axis invert in firmware
+- `PT_SAVE_BOOT` / NVS boot pose; `PT_CENTER`, `PT_SLEEP` (sleep tilt = −12°)
+- Optional boot `TILT_DIR_TEST` (±5°) to confirm which way the servo must turn for head-up
 - Camera Module 3 stream: 1280×720, q=85, correct colors (no channel swap on this Pi)
 - Tailscale remote access to dashboard and stream
 - Track modules functional; tensioner implemented; rover driven from dashboard
@@ -18,6 +19,7 @@
 
 - `firmware/src/main.cpp`: motors + ESP32Servo pan/tilt, NVS, invert flags
 - Must flash with PlatformIO + `ESP32Servo` lib; Serial2 pins required
+- Next flash: confirm tilt direction with `TILT_DIR_TEST 1`, then set it back to `0`
 
 ## Dashboard / services
 
@@ -37,12 +39,13 @@ Stream URL (example): `CYPHER_STREAM_URL=http://100.70.99.34:8080/stream` in `pi
 
 ## Known gaps / next
 
-1. Mechanical: tilt linkage / horn alignment for true optical center; head aim for desired FOV
-2. Optional motor wire swap if drive direction still reversed after software invert of servos only
-3. Lid + power distribution polish
-4. Disk space on Pi root was critically full during bring-up — monitor `df -h`
-5. Motor balancing parked until needed
-6. Do not enable sentry-tracker alongside Cypher stream/control without a shared camera design
+1. Confirm tilt invert with ±5° boot test, then disable `TILT_DIR_TEST`
+2. Mechanical: tilt linkage / horn alignment for true optical center; head aim for desired FOV
+3. Optional motor wire swap if drive direction still reversed after software invert of servos only
+4. Lid + power distribution polish
+5. Disk space on Pi root was critically full during bring-up — monitor `df -h`
+6. Motor balancing parked until needed
+7. Do not enable sentry-tracker alongside Cypher stream/control without a shared camera design
 
 ## Recently closed (this thread)
 
@@ -50,6 +53,7 @@ Stream URL (example): `CYPHER_STREAM_URL=http://100.70.99.34:8080/stream` in `pi
 - UART pin fix; servo motion confirmed quiet under continuous hold
 - Bridge + dashboard API on UART; hold-to-repeat UI
 - Stream service + color path verified
+- Tilt mechanical envelope updated: down 12° / up 25° (pan unchanged ±45°)
 
 ---
 

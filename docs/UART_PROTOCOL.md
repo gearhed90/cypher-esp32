@@ -1,6 +1,6 @@
 # Cypher UART Communication Protocol
 
-**Last Updated:** August 22, 2026  
+**Last Updated:** August 31, 2026  
 **Status:** Motors + pan/tilt working
 
 ## Overview
@@ -59,14 +59,15 @@ All commands: plain text + `\n`.
 | `PAN:angle` | Pan only | `PAN:-15` |
 | `TILT:angle` | Tilt only | `TILT:-5` |
 | `PT_CENTER` | (0, 0) | `PT_CENTER` |
-| `PT_SLEEP` | Sleep pose (0, −9) | `PT_SLEEP` |
+| `PT_SLEEP` | Sleep pose (0, −12) | `PT_SLEEP` |
 | `PT_SAVE_BOOT` | Save current pose to NVS | `PT_SAVE_BOOT` |
 | `PT_BOOT` | Go to saved boot pose | `PT_BOOT` |
 
-**Software limits:** pan **±45°**, tilt **±9°** (mechanical).  
+**Software limits:** pan **±45°**, tilt **down −12° / up +25°** (mechanical).  
 **Motion:** rate-limited ~28°/s.  
 **Invert:** both axes inverted in firmware (`INVERT_PAN` / `INVERT_TILT`) so dashboard directions match the robot.  
-**Boot:** loads pose from NVS if saved; else (0, 0).
+**Boot:** loads pose from NVS if saved; else (0, 0).  
+**Direction test:** `#define TILT_DIR_TEST 1` moves +5° then −5° on boot. If +5° is head-down, flip `INVERT_TILT`.
 
 ## Responses (ESP32 → Pi)
 

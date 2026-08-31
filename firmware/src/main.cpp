@@ -35,20 +35,27 @@ bool stringComplete = false;
 // === SERVO LIMITS ===
 const float PAN_MIN  = -45.0f;
 const float PAN_MAX  =  45.0f;
-const float TILT_MIN =  -9.0f;
-const float TILT_MAX =   9.0f;
+const float TILT_MIN = -12.0f;  // down
+const float TILT_MAX =  25.0f;  // up
 
 // Default boot if nothing saved in NVS
 const float DEFAULT_BOOT_PAN  = 0.0f;
 const float DEFAULT_BOOT_TILT = 0.0f;
 
-// Sleep pose
+// Sleep pose — head down against new mechanical floor
 const float SLEEP_PAN  =  0.0f;
-const float SLEEP_TILT = -9.0f;
+const float SLEEP_TILT = -12.0f;
 
 // Invert axes (dashboard controls were reversed)
 const bool INVERT_PAN  = true;
 const bool INVERT_TILT = true;
+
+// One-shot boot test: +5° then -5° then return to boot pose.
+// Flash with 1 to learn which way the servo must turn for head-up.
+// Set back to 0 for normal use.
+#define TILT_DIR_TEST 1
+const float TILT_DIR_TEST_DEG = 5.0f;
+const unsigned long TILT_DIR_TEST_HOLD_MS = 2000;
 
 // Speed deg/s
 const float SERVO_SPEED = 28.0f;
@@ -70,6 +77,17 @@ float tiltTarget  = 0.0f;
 float bootPan     = DEFAULT_BOOT_PAN;
 float bootTilt    = DEFAULT_BOOT_TILT;
 unsigned long lastServoUpdate = 0;
+
+#if TILT_DIR_TEST
+enum TiltDirTestPhase {
+  TDT_IDLE,
+  TDT_PLUS,
+  TDT_MINUS,
+  TDT_DONE
+};
+TiltDirTestPhase tdtPhase = TDT_IDLE;
+unsigned long tdtPhaseStart = 0;
+#endif
 
 float clamp(float v, float lo, float hi) {
   if (v < lo) return lo;
@@ -175,6 +193,37 @@ void updateServos() {
   tiltServo.write(tiltOut + 90.0f);
 }
 
+#if TILT_DIR_TEST
+void runTiltDirTest() {
+  unsigned long now = millis();
+  switch (tdtPhase) {
+    case TDT_IDLE:
+      Serial.println("TILT_DIR_TEST: +5 deg (want this to be HEAD UP)");
+      setTiltTarget(TILT_DIR_TEST_DEG);
+      tdtPhase = TDT_PLUS;
+      tdtPhaseStart = now;
+      break;
+    case TDT_PLUS:
+      if (now - tdtPhaseStart >= TILT_DIR_TEST_HOLD_MS) {
+        Serial.println("TILT_DIR_TEST: -5 deg (want this to be HEAD DOWN)");
+        setTiltTarget(-TILT_DIR_TEST_DEG);
+        tdtPhase = TDT_MINUS;
+        tdtPhaseStart = now;
+      }
+      break;
+    case TDT_MINUS:
+      if (now - tdtPhaseStart >= TILT_DIR_TEST_HOLD_MS) {
+        Serial.println("TILT_DIR_TEST: back to boot pose. Set TILT_DIR_TEST 0 after you confirm invert.");
+        goBootPose();
+        tdtPhase = TDT_DONE;
+      }
+      break;
+    case TDT_DONE:
+      break;
+  }
+}
+#endif
+
 void processCommand(String cmd) {
   cmd.trim();
   lastCommandTime = millis();
@@ -250,6 +299,7 @@ void setup() {
   Serial.println("=== Cypher ESP32 — Motors + Pan/Tilt ===");
   Serial.println("UART Serial2 RX=19 TX=18");
   Serial.printf("Servo invert pan=%d tilt=%d\n", INVERT_PAN, INVERT_TILT);
+  Serial.printf("Tilt limits down=%.1f up=%.1f\n", TILT_MIN, TILT_MAX);
 
   pinMode(AIN1, OUTPUT);
   pinMode(AIN2, OUTPUT);
@@ -273,6 +323,10 @@ void setup() {
   updateServos();
   Serial.printf("Boot pose: pan=%.1f tilt=%.1f\n", bootPan, bootTilt);
 
+#if TILT_DIR_TEST
+  Serial.println("TILT_DIR_TEST enabled — will move +5 then -5 after attach");
+#endif
+
   lastCommandTime = millis();
 }
 
@@ -288,6 +342,10 @@ void loop() {
     inputString = "";
     stringComplete = false;
   }
+
+#if TILT_DIR_TEST
+  runTiltDirTest();
+#endif
 
   updateServos();
 
